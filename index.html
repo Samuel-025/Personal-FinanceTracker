@@ -417,25 +417,8 @@ tr:hover .td-actions{opacity:1}
 const INCOME_CATS=["Salary","Freelance","Investment","Business","Other Income"];
 const EXPENSE_CATS=["Food","Transport","Housing","Utilities","Healthcare","Entertainment","Shopping","Education","Travel","Other Expense"];
 const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Food:"🍽",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
-let transactions=[
-  {id:1,date:"2026-06-10",amount:85000.0,category:"Salary",description:"June salary"},
-  {id:2,date:"2026-06-08",amount:12000.0,category:"Freelance",description:"Web project"},
-  {id:3,date:"2026-06-07",amount:18500.0,category:"Housing",description:"Rent"},
-  {id:4,date:"2026-06-05",amount:4200.0,category:"Food",description:"Groceries & dining"},
-  {id:5,date:"2026-06-04",amount:2800.0,category:"Transport",description:"Fuel & auto"},
-  {id:6,date:"2026-06-03",amount:1500.0,category:"Entertainment",description:"OTT & movies"},
-  {id:7,date:"2026-06-02",amount:3200.0,category:"Shopping",description:"Clothing"},
-  {id:8,date:"2026-06-01",amount:950.0,category:"Utilities",description:"Electricity & internet"},
-  {id:9,date:"2026-05-28",amount:75000.0,category:"Salary",description:"May salary"},
-  {id:10,date:"2026-05-15",amount:5000.0,category:"Investment",description:"SIP"},
-  {id:11,date:"2026-05-10",amount:18500.0,category:"Housing",description:"Rent"},
-  {id:12,date:"2026-05-08",amount:6200.0,category:"Food",description:"Groceries"},
-  {id:13,date:"2026-04-28",amount:75000.0,category:"Salary",description:"April salary"},
-  {id:14,date:"2026-04-10",amount:18500.0,category:"Housing",description:"Rent"},
-  {id:15,date:"2026-03-28",amount:75000.0,category:"Salary",description:"March salary"},
-  {id:16,date:"2026-03-10",amount:18500.0,category:"Housing",description:"Rent"}
-];
-let nextId=17,budgets={},sortField="date",sortDir=-1,pendingDeleteId=null,editingId=null,chartRange=6;
+let transactions=[];
+let nextId=1,budgets={},sortField="date",sortDir=-1,pendingDeleteId=null,editingId=null,chartRange=6;
 let lineChart,doughnutChart,barChart,incomeDonut,expenseDonut,theme="dark";
 const fmt=n=>"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate=s=>{if(!s)return "";const d=new Date(s+"T00:00:00");return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})};
@@ -602,7 +585,7 @@ function renderDashboard(){
 }
 function renderDashboardRecent(){
   const list=document.getElementById("recentList"),recent=transactions.slice(0,6);
-  if(!recent.length){list.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No transactions yet.</p></div>';return}
+  if(!recent.length){list.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;margin:0 auto 12px;color:var(--color-text-faint)"><path d="M9 17H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h4m6-4h4a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4m-6 0V3"/></svg><h3>No transactions yet</h3><p>Add your first transaction to get started.</p></div>';return}
   list.innerHTML=recent.map(tx=>{
     const inc=isIncome(tx.category);
     return `<div class="summary-row"><div class="summary-row-label"><div class="cat-icon" style="background:${inc?"var(--color-primary-highlight)":"var(--color-error-highlight)"}"><span style="font-size:14px">${CAT_EMOJIS[tx.category]||"💳"}</span></div><div><div style="font-size:var(--text-sm);font-weight:500">${tx.category}</div><div style="font-size:var(--text-xs);color:var(--color-text-muted)">${tx.description||fmtDate(tx.date)}</div></div></div><div class="summary-row-value" style="color:${inc?"var(--color-income)":"var(--color-expense)"}">${inc?"+":"-"}${fmt(tx.amount)}</div></div>`;
@@ -633,7 +616,7 @@ function setChartRange(n,btn){
 }
 function renderLineChart(){
   const C=getChartColors();
-  const months=chartRange===0?Math.max(12,Math.ceil((new Date()-new Date(Math.min(...transactions.map(t=>new Date(t.date)))))/(1000*60*60*24*30))+1):chartRange;
+  const months=chartRange===0?12:chartRange;
   const data=getMonthlyData(months),ctx=document.getElementById("lineChart");
   if(lineChart)lineChart.destroy();
   lineChart=new Chart(ctx,{type:"line",data:{labels:data.map(d=>d.label),datasets:[{label:"Income",data:data.map(d=>d.inc),borderColor:C.income,backgroundColor:C.incomeAlpha,fill:true,tension:0.4,pointRadius:4,pointHoverRadius:6,borderWidth:2},{label:"Expenses",data:data.map(d=>d.exp),borderColor:C.expense,backgroundColor:C.expenseAlpha,fill:true,tension:0.4,pointRadius:4,pointHoverRadius:6,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{labels:{color:C.textColor,font:{family:"DM Sans"},usePointStyle:true,pointStyle:"circle"}},tooltip:{backgroundColor:theme==="dark"?"#1c2028":"#fff",titleColor:C.textColor,bodyColor:C.textColor,borderColor:theme==="dark"?"#2a3040":"#e2e8f0",borderWidth:1,callbacks:{label:ctx=>`${ctx.dataset.label}: ₹${ctx.raw.toLocaleString("en-IN",{minimumFractionDigits:2})}`}}},scales:{x:{grid:{color:C.gridColor},ticks:{color:C.textColor,font:{family:"DM Sans",size:11}}},y:{grid:{color:C.gridColor},ticks:{color:C.textColor,font:{family:"DM Mono",size:11},callback:v=>"₹"+v.toLocaleString("en-IN")}}}}});
@@ -644,7 +627,7 @@ function renderDoughnutChart(){
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.expense,C.blue,C.purple,C.yellow,C.orange,C.income,"#f472b6","#34d399","#a78bfa","#fb923c"];
   const ctx=document.getElementById("doughnutChart");
   if(doughnutChart)doughnutChart.destroy();
-  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data.</p></div>';return}
+  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
   doughnutChart=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ₹${ctx.raw.toLocaleString("en-IN",{minimumFractionDigits:2})} (${((ctx.raw/values.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)`}}}}});
 }
 function renderAnalytics(){renderBarChart();renderIncomePie();renderExpensePie();renderCategorySummary()}
@@ -659,7 +642,7 @@ function renderIncomePie(){
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.income,C.blue,C.purple,C.yellow,C.orange];
   const ctx=document.getElementById("incomeDonut");
   if(incomeDonut)incomeDonut.destroy();
-  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No income data.</p></div>';return}
+  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No income data yet.</p></div>';return}
   incomeDonut=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"bottom",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}}}}});
 }
 function renderExpensePie(){
@@ -668,12 +651,13 @@ function renderExpensePie(){
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.expense,C.blue,C.purple,C.yellow,C.orange,"#f472b6"];
   const ctx=document.getElementById("expenseDonut");
   if(expenseDonut)expenseDonut.destroy();
-  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data.</p></div>';return}
+  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
   expenseDonut=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"bottom",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}}}}});
 }
 function renderCategorySummary(){
   const div=document.getElementById("categorySummary"),catData={};
   transactions.forEach(t=>{if(!catData[t.category])catData[t.category]={cat:t.category,type:getType(t.category),total:0,count:0};catData[t.category].total+=t.amount;catData[t.category].count++;});
+  if(!Object.keys(catData).length){div.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No data yet.</p></div>';return}
   const rows=Object.values(catData).sort((a,b)=>b.total-a.total),maxVal=Math.max(...rows.map(r=>r.total),1);
   div.innerHTML=rows.map(r=>{
     const inc=r.type==="Income",pct=Math.round((r.total/maxVal)*100);
