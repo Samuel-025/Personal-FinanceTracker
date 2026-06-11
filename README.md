@@ -1,6 +1,6 @@
 # Personal Finance Tracker
 
-A Python CLI tool to track personal income and expenses, with an upgraded **web dashboard** (`personal-finance-tracker.html`) that runs entirely in your browser — no server needed.
+A Python CLI tool to track personal income and expenses, with an upgraded **web dashboard** (`index.html`) that runs entirely in your browser — no server needed.
 
 ---
 
@@ -18,7 +18,7 @@ Open: https://samuel-025.github.io/Personal-FinanceTracker/
 - Plot daily income vs expenses and monthly summaries using Matplotlib
 - Export data to CSV
 
-### Web Dashboard (`personal-finance-tracker.html`)
+### Web Dashboard (`index.html`)
 - **Dashboard** — KPI cards, Income vs Expenses line chart (3M/6M/1Y/All), spending doughnut chart, recent transactions
 - **Transactions** — sortable table, date/type/category filters, global search, inline edit & delete, CSV export
 - **Analytics** — monthly bar chart (12 months), income & expense breakdowns by category with progress bars
@@ -40,7 +40,7 @@ python main.py
 
 ## Usage (Web Dashboard)
 
-Open `personal-finance-tracker.html` in any modern browser. No installation or server required.
+Open `index.html` in any modern browser, or visit the [live demo](https://samuel-025.github.io/Personal-FinanceTracker/). No installation or server required.
 
 ---
 
@@ -48,12 +48,11 @@ Open `personal-finance-tracker.html` in any modern browser. No installation or s
 
 ```
 Personal-FinanceTracker/
-├── main.py                        # CLI app — add/view/update/delete/plot transactions
-├── data_entry.py                  # Input helpers and validators for CLI
-├── requirements.txt               # Python dependencies (pandas, matplotlib)
-├── personal-finance-tracker.html  # Full web dashboard (no server needed)
-├── index.html                     # Redirect to web dashboard (GitHub Pages entry point)
-├── LICENSE                        # MIT License
+├── main.py           # CLI app — add/view/update/delete/plot transactions
+├── data_entry.py     # Input helpers and validators for CLI
+├── requirements.txt  # Python dependencies (pandas, matplotlib)
+├── index.html        # Full web dashboard (GitHub Pages entry point)
+├── LICENSE           # MIT License
 └── README.md
 ```
 
@@ -71,7 +70,7 @@ Personal-FinanceTracker/
 | `main.py` | `plot_transactions()` used wrong index source for `reindex()`, misaligning chart data | Fixed to use `pd.date_range()` for a clean daily index |
 | `main.py` | Monthly plot only showed net amount instead of separate income/expense lines | Split into two `resample("ME")` series |
 | `Requirement.txt.txt` | Double `.txt` extension, typo `matpolt` | Replaced with `requirements.txt` |
-| `index.html` | Empty placeholder file | Filled with meta-refresh redirect to dashboard |
+| `index.html` | Separate redirect file + dashboard file | Merged into single `index.html` — no redirect, loads directly |
 | `finance_data.csv` | Personal data committed to repo | Deleted from repo, now properly gitignored |
 
 ---
