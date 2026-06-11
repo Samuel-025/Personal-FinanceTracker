@@ -40,7 +40,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# User data — do not commit personal finance data
+# User data — generated locally by the CLI, do not commit
+# If this file still appears tracked, run: git rm --cached finance_data.csv
 finance_data.csv
 
 # Logs

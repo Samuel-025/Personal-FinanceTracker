@@ -13,7 +13,7 @@ Open: https://samuel-025.github.io/Personal-FinanceTracker/
 ## Features
 
 ### CLI (`main.py`)
-- Add, view, update, and delete transactions stored in `finance_data.csv`
+- Add, view, update, and delete transactions stored in `finance_data.csv` (auto-created on first run)
 - Filter transactions by date range
 - Plot daily income vs expenses and monthly summaries using Matplotlib
 - Export data to CSV
@@ -27,7 +27,7 @@ Open: https://samuel-025.github.io/Personal-FinanceTracker/
 - **Mobile responsive** — collapsible sidebar
 - Currency formatted in Indian Rupees (₹)
 
-> **Note:** The web dashboard stores data in memory only. All transactions reset on page refresh. For persistent data use the CLI with `finance_data.csv`.
+> **Note:** The web dashboard stores data in memory only. All transactions reset on page refresh. For persistent data use the CLI — it saves to `finance_data.csv` which is created automatically on first run.
 
 ---
 
@@ -52,10 +52,12 @@ Personal-FinanceTracker/
 ├── data_entry.py                  # Input helpers and validators for CLI
 ├── requirements.txt               # Python dependencies (pandas, matplotlib)
 ├── personal-finance-tracker.html  # Full web dashboard (no server needed)
-├── index.html                     # Redirect to web dashboard
-├── LICENSE
+├── index.html                     # Redirect to web dashboard (GitHub Pages entry point)
+├── LICENSE                        # MIT License
 └── README.md
 ```
+
+> `finance_data.csv` is generated locally by the CLI and is excluded from version control via `.gitignore`.
 
 ---
 
@@ -70,7 +72,7 @@ Personal-FinanceTracker/
 | `main.py` | Monthly plot only showed net amount instead of separate income/expense lines | Split into two `resample("ME")` series |
 | `Requirement.txt.txt` | Double `.txt` extension, typo `matpolt` | Replaced with `requirements.txt` |
 | `index.html` | Empty placeholder file | Filled with meta-refresh redirect to dashboard |
-| `fintrack.html` | Duplicate of main dashboard | Removed — `personal-finance-tracker.html` is canonical |
+| `finance_data.csv` | Personal data committed to repo | Deleted from repo, now properly gitignored |
 
 ---
 
