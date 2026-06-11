@@ -6,7 +6,7 @@ A Python CLI tool to track personal income and expenses, with an upgraded **web 
 
 ## Live Demo
 
-open: https://samuel-025.github.io/Personal-FinanceTracker/
+Open: https://samuel-025.github.io/Personal-FinanceTracker/
 
 ---
 
@@ -53,6 +53,7 @@ Personal-FinanceTracker/
 ├── requirements.txt               # Python dependencies (pandas, matplotlib)
 ├── personal-finance-tracker.html  # Full web dashboard (no server needed)
 ├── index.html                     # Redirect to web dashboard
+├── LICENSE
 └── README.md
 ```
 
@@ -70,3 +71,9 @@ Personal-FinanceTracker/
 | `Requirement.txt.txt` | Double `.txt` extension, typo `matpolt` | Replaced with `requirements.txt` |
 | `index.html` | Empty placeholder file | Filled with meta-refresh redirect to dashboard |
 | `fintrack.html` | Duplicate of main dashboard | Removed — `personal-finance-tracker.html` is canonical |
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
