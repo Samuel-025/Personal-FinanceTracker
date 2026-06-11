@@ -6,9 +6,7 @@ A Python CLI tool to track personal income and expenses, with an upgraded **web 
 
 ## Live Demo
 
-If GitHub Pages is enabled, open: https://samuel-025.github.io/Personal-FinanceTracker/
-
-Or open personal-finance-tracker.html directly in any modern browser — no installation or server required.
+open: https://samuel-025.github.io/Personal-FinanceTracker/
 
 ---
 
