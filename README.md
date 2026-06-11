@@ -1,6 +1,14 @@
 # Personal Finance Tracker
 
-A Python CLI tool to track personal income and expenses, with an upgraded **web dashboard** (`fintrack.html`) that runs entirely in your browser — no server needed.
+A Python CLI tool to track personal income and expenses, with an upgraded **web dashboard** (`personal-finance-tracker.html`) that runs entirely in your browser — no server needed.
+
+---
+
+## Live Demo
+
+If GitHub Pages is enabled, open: `https://samuel-025.github.io/Personal-FinanceTracker/`
+
+Or open `personal-finance-tracker.html` directly in any modern browser — no installation or server required.
 
 ---
 
@@ -12,7 +20,7 @@ A Python CLI tool to track personal income and expenses, with an upgraded **web 
 - Plot daily income vs expenses and monthly summaries using Matplotlib
 - Export data to CSV
 
-### Web Dashboard (`fintrack.html`)
+### Web Dashboard (`personal-finance-tracker.html`)
 - **Dashboard** — KPI cards, Income vs Expenses line chart (3M/6M/1Y/All), spending doughnut chart, recent transactions
 - **Transactions** — sortable table, date/type/category filters, global search, inline edit & delete, CSV export
 - **Analytics** — monthly bar chart (12 months), income & expense breakdowns by category with progress bars
@@ -20,6 +28,8 @@ A Python CLI tool to track personal income and expenses, with an upgraded **web 
 - **Dark / Light mode** toggle
 - **Mobile responsive** — collapsible sidebar
 - Currency formatted in Indian Rupees (₹)
+
+> **Note:** The web dashboard stores data in memory only. All transactions reset on page refresh. For persistent data use the CLI with `finance_data.csv`.
 
 ---
 
@@ -32,7 +42,21 @@ python main.py
 
 ## Usage (Web Dashboard)
 
-Open `fintrack.html` in any modern browser. No installation or server required.
+Open `personal-finance-tracker.html` in any modern browser. No installation or server required.
+
+---
+
+## Project Structure
+
+```
+Personal-FinanceTracker/
+├── main.py                        # CLI app — add/view/update/delete/plot transactions
+├── data_entry.py                  # Input helpers and validators for CLI
+├── requirements.txt               # Python dependencies (pandas, matplotlib)
+├── personal-finance-tracker.html  # Full web dashboard (no server needed)
+├── index.html                     # Redirect to web dashboard
+└── README.md
+```
 
 ---
 
@@ -46,3 +70,5 @@ Open `fintrack.html` in any modern browser. No installation or server required.
 | `main.py` | `plot_transactions()` used wrong index source for `reindex()`, misaligning chart data | Fixed to use `pd.date_range()` for a clean daily index |
 | `main.py` | Monthly plot only showed net amount instead of separate income/expense lines | Split into two `resample("ME")` series |
 | `Requirement.txt.txt` | Double `.txt` extension, typo `matpolt` | Replaced with `requirements.txt` |
+| `index.html` | Empty placeholder file | Filled with meta-refresh redirect to dashboard |
+| `fintrack.html` | Duplicate of main dashboard | Removed — `personal-finance-tracker.html` is canonical |
