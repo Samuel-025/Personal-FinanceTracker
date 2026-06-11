@@ -1,3 +1,2 @@
-# Python dependencies for Personal Finance Tracker
 pandas>=2.0.0
 matplotlib>=3.7.0
