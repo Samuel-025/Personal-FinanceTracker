@@ -1,79 +1,48 @@
 # Personal Finance Tracker
 
-A dual-mode personal finance tracker: a **Python CLI** for local use and a **full web app** for browser-based tracking.
-
-**[Live Demo](https://samuel-025.github.io/Personal-FinanceTracker/)**
+A Python CLI tool to track personal income and expenses, with an upgraded **web dashboard** (`fintrack.html`) that runs entirely in your browser — no server needed.
 
 ---
 
 ## Features
 
-### Web App (`index.html`)
-- **Dashboard** — KPI cards, Income vs Expense line chart (3M/6M/1Y/All), spending doughnut, recent transactions
-- **Add Transaction** — validated form with 12 granular categories (Salary, Food, Transport, etc.)
+### CLI (`main.py`)
+- Add, view, update, and delete transactions stored in `finance_data.csv`
+- Filter transactions by date range
+- Plot daily income vs expenses and monthly summaries using Matplotlib
+- Export data to CSV
+
+### Web Dashboard (`fintrack.html`)
+- **Dashboard** — KPI cards, Income vs Expenses line chart (3M/6M/1Y/All), spending doughnut chart, recent transactions
 - **Transactions** — sortable table, date/type/category filters, global search, inline edit & delete, CSV export
-- **Analytics** — monthly bar chart, income & expense breakdown pies, category progress bars
-- **Budgets** — set monthly spending limits per category with color-coded progress tracking
+- **Analytics** — monthly bar chart (12 months), income & expense breakdowns by category with progress bars
+- **Budgets** — set monthly limits per category with live progress bars and over-budget alerts
 - **Dark / Light mode** toggle
-- **Mobile responsive** with slide-out sidebar
-
-### Python CLI (`main.py` + `data_entry.py`)
-- Add, view, update, delete transactions stored in `finance_data.csv`
-- Date-range filtered views with income/expense summary
-- Matplotlib charts: Income vs Expense over time, Monthly bar chart
-- CSV export
+- **Mobile responsive** — collapsible sidebar
+- Currency formatted in Indian Rupees (₹)
 
 ---
 
-## Bugs Fixed
+## Setup (CLI)
 
-| File | Bug | Fix |
-|------|-----|-----|
-| `main.py` | `sort_csv_by_date()` saved datetime objects instead of `dd-mm-yyyy` strings, corrupting the CSV | Added `.dt.strftime(cls.FORMAT)` before `to_csv()` |
-| `main.py` | `update_entry()` used `if new_amount:` which is falsy for `0` | Changed to `if new_amount is not None:` |
-| `main.py` | `plot_transactions()` reindexed to raw transaction index instead of a daily date range | Fixed to use `pd.date_range(min, max, freq="D")` |
-| `main.py` | `plot_monthly_summary()` summed all categories together | Split into separate income/expense bar chart |
-| `data_entry.py` | Typo: `"Invalid date frmat. Please entr..."` | Corrected |
-| `data_entry.py` | Error said `"Account must be..."` instead of `"Amount must be..."` | Corrected |
-| `index.html` | Chart canvas destroyed via `innerHTML` on empty state causing `TypeError` crash on revisit | Replaced with show/hide sibling `<div>` pattern |
-| `index.html` | Mobile sidebar had no backdrop click-to-close | Added backdrop overlay |
-| `index.html` | Redundant `card.style.display="block"` before `resetAddForm()` | Removed |
-| `index.html` | Unused `let ok = true` variables | Removed |
-| `Requirement.txt.txt` | Double `.txt` extension; typo `matpolt` | Renamed to `requirements.txt`, corrected |
-
----
-
-## Quick Start
-
-### Web App
-Open `index.html` in any browser — no installation required.
-
-### Python CLI
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
----
+## Usage (Web Dashboard)
 
-## Project Structure
-
-```
-Personal-FinanceTracker/
-├── index.html          # Full-featured web app (single file, zero dependencies)
-├── main.py             # Python CLI — transaction management + charts
-├── data_entry.py       # Python CLI — input validation helpers
-├── finance_data.csv    # CSV data store (auto-created if missing)
-└── requirements.txt    # Python dependencies
-```
+Open `fintrack.html` in any modern browser. No installation or server required.
 
 ---
 
-## Tech Stack
+## Bug Fixes
 
-| Layer | Web App | Python CLI |
-|-------|---------|------------|
-| Language | HTML / CSS / Vanilla JS | Python 3.8+ |
-| Charts | Chart.js 4.4 | Matplotlib |
-| Data | In-browser | CSV via Pandas |
-| Styling | Custom CSS (dark/light mode) | Terminal |
+| File | Bug | Fix |
+|---|---|---|
+| `data_entry.py` | Typos in error messages (`frmat`, `entr`, `Account`) | Corrected all three |
+| `main.py` | `sort_csv_by_date()` saved datetime objects instead of strings, corrupting CSV on next read | Added `.dt.strftime()` conversion before saving |
+| `main.py` | `update_entry()` used `if new_amount:` — falsy for `0` | Changed to `if new_amount is not None:` |
+| `main.py` | `plot_transactions()` used wrong index source for `reindex()`, misaligning chart data | Fixed to use `pd.date_range()` for a clean daily index |
+| `main.py` | Monthly plot only showed net amount instead of separate income/expense lines | Split into two `resample("ME")` series |
+| `Requirement.txt.txt` | Double `.txt` extension, typo `matpolt` | Replaced with `requirements.txt` |
