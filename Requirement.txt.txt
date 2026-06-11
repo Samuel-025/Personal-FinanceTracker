@@ -1,7 +1,0 @@
-Library:
-Pandas
-matplot
-
-install:
-pip install pandas
-pip install matpolt
