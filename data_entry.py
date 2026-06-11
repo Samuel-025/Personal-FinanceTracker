@@ -1,27 +1,32 @@
 from datetime import datetime
 
-date_format =  "%d-%m-%Y"
+DATE_FORMAT = "%d-%m-%Y"
 CATEGORIES = {"I": "Income", "E": "Expense"}
 
 
 def get_date(prompt, allow_default=False):
-    date_str = input(prompt)
+    """
+    BUG FIX: Typo "Invalid date frmat. Please entr..." corrected.
+    """
+    date_str = input(prompt).strip()
     if allow_default and not date_str:
-        return datetime.today().strftime("%d-%m-%Y")
-    
+        return datetime.today().strftime(DATE_FORMAT)
     try:
-        valid_date = datetime.strptime(date_str, "%d-%m-%Y")
-        return valid_date.strftime("%d-%m-%Y")
+        valid_date = datetime.strptime(date_str, DATE_FORMAT)
+        return valid_date.strftime(DATE_FORMAT)
     except ValueError:
-        print("Invalid date frmat. Please entr the date in dd-mm-yyyy format")
+        print("Invalid date format. Please enter the date in dd-mm-yyyy format.")
         return get_date(prompt, allow_default)
 
 
 def get_amount():
+    """
+    BUG FIX: Error message said "Account must be..." instead of "Amount must be...".
+    """
     try:
         amount = float(input("Enter the amount: "))
-        if amount<= 0:
-            raise ValueError("Account must be a non-negative non-zero value.")
+        if amount <= 0:
+            raise ValueError("Amount must be a non-zero positive value.")
         return amount
     except ValueError as e:
         print(e)
@@ -29,13 +34,12 @@ def get_amount():
 
 
 def get_category():
-    category = input("Enter the category ('I' for income or 'E' for Expense): ").upper()
+    category = input("Enter the category ('I' for Income or 'E' for Expense): ").upper()
     if category in CATEGORIES:
         return CATEGORIES[category]
-    
-    print("Invalid category. Please enter 'I' for Income or 'E' for Expense")
+    print("Invalid category. Please enter 'I' for Income or 'E' for Expense.")
     return get_category()
 
 
 def get_description():
-    return input("Enter a description (optional): ")
+    return input("Enter a description (optional): ").strip()
