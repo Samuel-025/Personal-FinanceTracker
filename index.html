@@ -489,37 +489,77 @@ const getType = cat => isIncome(cat) ? "Income" : "Expense";
 
 async function checkApiStatus(){
   const badge=document.getElementById("apiStatusBadge");
+  if(!badge)return;
+
+  let controller=null, timeoutId=null;
+  if(typeof AbortController!=="undefined"){
+    controller=new AbortController();
+    timeoutId=setTimeout(()=>controller.abort(),2500);
+  }
+
   try{
-    const res=await fetch(`${API_BASE}/transactions`,{signal:AbortSignal.timeout(2000)});
+    const options=controller?{signal:controller.signal}:{};
+    const res=await fetch(`${API_BASE}/transactions`,options);
+    if(timeoutId)clearTimeout(timeoutId);
     if(res.ok){
       isApiOnline=true;
       badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ade80"></span> API Connected (SQLite)';
       badge.style.background="var(--color-primary-highlight)";
       badge.style.color="var(--color-income)";
       const apiTxs=await res.json();
-      if(apiTxs.length>0){
+      if(Array.isArray(apiTxs)){
         transactions=apiTxs;
         saveData();
         renderDashboard();
+        renderTransactions();
       }
+      return;
     }
   }catch(e){
-    isApiOnline=false;
-    badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)';
-    badge.style.background="rgba(255,255,255,0.06)";
-    badge.style.color="var(--color-text-muted)";
+    if(timeoutId)clearTimeout(timeoutId);
   }
+
+  isApiOnline=false;
+  badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)';
+  badge.style.background="rgba(255,255,255,0.06)";
+  badge.style.color="var(--color-text-muted)";
+  renderDashboard();
+  renderTransactions();
 }
+
+const toIso = dStr => {
+  if (!dStr) return "";
+  if (dStr.includes("-")) {
+    const p = dStr.split("T")[0].split("-");
+    if (p[0].length === 4) return dStr;
+    if (p[2].length === 4) return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+  }
+  return dStr;
+};
+
 function getFilteredTx(){
-  const from=document.getElementById("filterFrom").value,to=document.getElementById("filterTo").value;
-  const type=document.getElementById("filterType").value,cat=document.getElementById("filterCategory").value;
-  const search=document.getElementById("globalSearch").value.toLowerCase();
+  const fromEl=document.getElementById("filterFrom"), toEl=document.getElementById("filterTo");
+  const typeEl=document.getElementById("filterType"), catEl=document.getElementById("filterCategory");
+  const searchEl=document.getElementById("globalSearch");
+
+  const from=fromEl?fromEl.value:"";
+  const to=toEl?toEl.value:"";
+  const type=typeEl?typeEl.value:"";
+  const cat=catEl?catEl.value:"";
+  const search=searchEl?searchEl.value.toLowerCase():"";
+
   return transactions.filter(t=>{
-    if(from&&t.date<from)return false;
-    if(to&&t.date>to)return false;
-    if(type&&getType(t.category)!==type)return false;
-    if(cat&&t.category!==cat)return false;
-    if(search&&!t.description.toLowerCase().includes(search)&&!t.category.toLowerCase().includes(search)&&!String(t.amount).includes(search))return false;
+    const tIso=toIso(t.date);
+    if(from && tIso < from) return false;
+    if(to && tIso > to) return false;
+    if(type && getType(t.category) !== type) return false;
+    if(cat && t.category !== cat) return false;
+    if(search){
+      const desc=(t.description||"").toLowerCase();
+      const cName=(t.category||"").toLowerCase();
+      const amt=String(t.amount);
+      if(!desc.includes(search) && !cName.includes(search) && !amt.includes(search)) return false;
+    }
     return true;
   });
 }
