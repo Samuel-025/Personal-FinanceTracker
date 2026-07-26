@@ -49,9 +49,9 @@ def display_header():
 def print_kpis(transactions, categories):
     db = get_db_session()
     try:
-        income_cats = [c.name for c in categories if c.type == "Income"]
-        total_inc = sum(t.amount for t in transactions if t.category in income_cats)
-        total_exp = sum(t.amount for t in transactions if t.category not in income_cats)
+        income_cats = [str(c.name) for c in categories if c.type == "Income"]
+        total_inc = sum(float(getattr(t, "amount", 0.0)) for t in transactions if t.category in income_cats)
+        total_exp = sum(float(getattr(t, "amount", 0.0)) for t in transactions if t.category not in income_cats)
         net_savings = total_inc - total_exp
 
         savings_style = "bold green" if net_savings >= 0 else "bold red"
@@ -212,19 +212,23 @@ def update_transaction_cli():
             console.print("[red]Transaction ID not found.[/red]")
             return
 
-        console.print(f"\n[dim]Updating Transaction #{tx.id} ({str(tx.date)} - ₹{float(tx.amount)})[/dim]")
-        new_date = Prompt.ask("New date (dd-mm-yyyy) or press Enter to keep current", default=str(tx.date))
-        new_amount_str = Prompt.ask("New amount or press Enter to keep current", default=str(tx.amount))
+        tx_amt = float(getattr(tx, "amount", 0.0))
+        tx_date = str(getattr(tx, "date", ""))
+        tx_desc = str(getattr(tx, "description", ""))
+
+        console.print(f"\n[dim]Updating Transaction #{tx.id} ({tx_date} - ₹{tx_amt})[/dim]")
+        new_date = Prompt.ask("New date (dd-mm-yyyy) or press Enter to keep current", default=tx_date)
+        new_amount_str = Prompt.ask("New amount or press Enter to keep current", default=str(tx_amt))
         try:
             new_amount = float(new_amount_str)
         except ValueError:
-            new_amount = float(tx.amount)
+            new_amount = tx_amt
 
-        new_desc = Prompt.ask("New description or press Enter to keep current", default=str(tx.description or ""))
+        new_desc = Prompt.ask("New description or press Enter to keep current", default=tx_desc)
 
-        setattr(tx, "date", str(new_date))
-        setattr(tx, "amount", float(new_amount))
-        setattr(tx, "description", str(new_desc))
+        tx.date = new_date
+        tx.amount = new_amount
+        tx.description = new_desc
         db.commit()
         console.print("[bold green]✓ Transaction updated successfully![/bold green]")
     finally:
@@ -248,7 +252,9 @@ def delete_transaction_cli():
             console.print("[red]Transaction ID not found.[/red]")
             return
 
-        if Confirm.ask(f"Are you sure you want to delete transaction #{tx.id} ({str(tx.category)} ₹{float(tx.amount)})?"):
+        tx_amt = float(getattr(tx, "amount", 0.0))
+        tx_cat = str(getattr(tx, "category", ""))
+        if Confirm.ask(f"Are you sure you want to delete transaction #{tx.id} ({tx_cat} ₹{tx_amt})?"):
             db.delete(tx)
             db.commit()
             console.print("[bold green]✓ Transaction deleted successfully![/bold green]")
@@ -301,8 +307,9 @@ def budget_manager_cli():
             try:
                 cat_str = str(t.category)
                 d_str = str(t.date)
+                t_amt = float(getattr(t, "amount", 0.0))
                 if d_str[-7:] == this_month_str:
-                    monthly_exp[cat_str] = monthly_exp.get(cat_str, 0.0) + float(t.amount)
+                    monthly_exp[cat_str] = monthly_exp.get(cat_str, 0.0) + t_amt
             except Exception:
                 pass
 
@@ -315,7 +322,7 @@ def budget_manager_cli():
 
             for b in budgets:
                 cat_name_str = str(b.category_name)
-                limit_val = float(b.monthly_limit)
+                limit_val = float(getattr(b, "monthly_limit", 0.0))
                 spent = monthly_exp.get(cat_name_str, 0.0)
                 over = spent > limit_val
                 pct = min(int((spent / limit_val) * 100), 100) if limit_val > 0 else 0
@@ -342,7 +349,7 @@ def budget_manager_cli():
 
             b = db.query(Budget).filter(Budget.category_name == cat_name).first()
             if b:
-                setattr(b, "monthly_limit", float(limit))
+                b.monthly_limit = limit
             else:
                 b = Budget(category_name=cat_name, monthly_limit=limit)
                 db.add(b)
@@ -367,10 +374,11 @@ def recurring_manager_cli():
             table.add_column("Next Due Date")
 
             for r in rules:
+                r_amt = float(getattr(r, "amount", 0.0))
                 table.add_row(
                     str(r.id),
                     str(r.description),
-                    f"₹{float(r.amount):,.2f}",
+                    f"₹{r_amt:,.2f}",
                     str(r.category),
                     str(r.frequency),
                     str(r.next_date),
