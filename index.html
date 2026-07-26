@@ -748,52 +748,59 @@ function confirmDelete(){
   if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
 }
 function renderDashboard(){
-  const now = new Date();
-  const thisMonth = now.toISOString().slice(0,7);
-  const monthly = transactions.filter(t => toIso(t.date).slice(0,7) === thisMonth);
+  try {
+    const kpiGrid = document.getElementById("kpiGrid");
+    if (!kpiGrid) return;
 
-  const allInc = transactions.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
-  const allExp = transactions.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
-  const allNet = allInc - allExp;
+    const now = new Date();
+    const thisMonth = now.toISOString().slice(0,7);
+    const monthly = transactions.filter(t => toIso(t.date).slice(0,7) === thisMonth);
 
-  let displayInc = allInc;
-  let displayExp = allExp;
-  let displayNet = allNet;
-  let subText = "Total across all transactions";
+    const allInc = transactions.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+    const allExp = transactions.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+    const allNet = allInc - allExp;
 
-  if (monthly.length > 0) {
-    displayInc = monthly.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
-    displayExp = monthly.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
-    displayNet = displayInc - displayExp;
-    subText = `${monthly.length} transaction${monthly.length !== 1 ? 's' : ''} in ${now.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}`;
+    let displayInc = allInc;
+    let displayExp = allExp;
+    let displayNet = allNet;
+    let subText = "Total across all transactions";
+
+    if (monthly.length > 0) {
+      displayInc = monthly.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+      displayExp = monthly.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+      displayNet = displayInc - displayExp;
+      subText = `${monthly.length} transaction${monthly.length !== 1 ? 's' : ''} in ${now.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}`;
+    }
+
+    kpiGrid.innerHTML = `
+      <div class="kpi-card kpi-income">
+        <div class="kpi-label">${monthly.length > 0 ? "This Month Income" : "Total Income"}</div>
+        <div class="kpi-value">${fmt(displayInc)}</div>
+        <div class="kpi-sub">${monthly.length > 0 ? `All-time: ${fmt(allInc)}` : "All-time earnings"}</div>
+      </div>
+      <div class="kpi-card kpi-expense">
+        <div class="kpi-label">${monthly.length > 0 ? "This Month Expenses" : "Total Expenses"}</div>
+        <div class="kpi-value">${fmt(displayExp)}</div>
+        <div class="kpi-sub">${monthly.length > 0 ? `All-time: ${fmt(allExp)}` : "All-time spending"}</div>
+      </div>
+      <div class="kpi-card kpi-net ${displayNet >= 0 ? "positive" : "negative"}">
+        <div class="kpi-label">${monthly.length > 0 ? "Net Savings" : "Net Balance"}</div>
+        <div class="kpi-value">${fmt(displayNet)}</div>
+        <div class="kpi-sub">${displayNet >= 0 ? "Surplus balance" : "Deficit balance"}</div>
+      </div>
+      <div class="kpi-card kpi-count">
+        <div class="kpi-label">Total Transactions</div>
+        <div class="kpi-value">${transactions.length}</div>
+        <div class="kpi-sub">${subText}</div>
+      </div>
+    `;
+
+    renderDashboardRecent();
+    renderLineChart();
+    renderDoughnutChart();
+  } catch (err) {
+    console.error("renderDashboard error:", err);
   }
-
-  document.getElementById("kpiGrid").innerHTML = `
-    <div class="kpi-card kpi-income">
-      <div class="kpi-label">${monthly.length > 0 ? "This Month Income" : "Total Income"}</div>
-      <div class="kpi-value">${fmt(displayInc)}</div>
-      <div class="kpi-sub">${monthly.length > 0 ? `All-time: ${fmt(allInc)}` : "All-time earnings"}</div>
-    </div>
-    <div class="kpi-card kpi-expense">
-      <div class="kpi-label">${monthly.length > 0 ? "This Month Expenses" : "Total Expenses"}</div>
-      <div class="kpi-value">${fmt(displayExp)}</div>
-      <div class="kpi-sub">${monthly.length > 0 ? `All-time: ${fmt(allExp)}` : "All-time spending"}</div>
-    </div>
-    <div class="kpi-card kpi-net ${displayNet >= 0 ? "positive" : "negative"}">
-      <div class="kpi-label">${monthly.length > 0 ? "Net Savings" : "Net Balance"}</div>
-      <div class="kpi-value">${fmt(displayNet)}</div>
-      <div class="kpi-sub">${displayNet >= 0 ? "Surplus balance" : "Deficit balance"}</div>
-    </div>
-    <div class="kpi-card kpi-count">
-      <div class="kpi-label">Total Transactions</div>
-      <div class="kpi-value">${transactions.length}</div>
-      <div class="kpi-sub">${subText}</div>
-    </div>
-  `;
-
-  renderDashboardRecent();
-  renderLineChart();
-  renderDoughnutChart();
 }
 
 function renderDashboardRecent(){
@@ -939,14 +946,17 @@ function renderBudgets(){
   glance.innerHTML=`<div class="summary-row"><div class="summary-row-label">📅 ${monthName} Income</div><div class="summary-row-value" style="color:var(--color-income)">${fmt(inc)}</div></div><div class="summary-row"><div class="summary-row-label">💸 ${monthName} Expenses</div><div class="summary-row-value" style="color:var(--color-expense)">${fmt(exp)}</div></div><div class="summary-row"><div class="summary-row-label">💰 Net Savings</div><div class="summary-row-value" style="color:${inc-exp>=0?"var(--color-income)":"var(--color-expense)"}">${fmt(inc-exp)}</div></div>`;
 }
 function deleteBudget(cat){delete budgets[cat];saveData();toast(`Budget for ${cat} removed.`,"info");renderBudgets()}
-function rebuildCharts(){
-  if(document.getElementById("view-dashboard").classList.contains("active")){renderLineChart();renderDoughnutChart()}
-  if(document.getElementById("view-analytics").classList.contains("active")){renderAnalytics()}
+try {
+  const dateInp = document.getElementById("inp-date");
+  if (dateInp) dateInp.value = new Date().toISOString().split("T")[0];
+  renderDashboard();
+  checkApiStatus();
+  if (typeof lucide !== "undefined" && lucide.createIcons) {
+    lucide.createIcons();
+  }
+} catch (e) {
+  console.error("Initialization error:", e);
 }
-document.getElementById("inp-date").value=new Date().toISOString().split("T")[0];
-renderDashboard();
-checkApiStatus();
-lucide.createIcons();
 </script>
 </body>
 </html>
