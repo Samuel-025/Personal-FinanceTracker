@@ -1,0 +1,22 @@
+name: Update Repository Metadata
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Sync Repository Description & Topics via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh repo edit ${{ github.repository }} \
+            --description "💰 Unified Personal Finance Tracker featuring a FastAPI + SQLite backend REST API, Rich Terminal CLI, multi-currency Web Dashboard, and PDF/Excel report exports." \
+            --add-topic "personal-finance,finance-tracker,fastapi,sqlite,rich-cli,pdf-export,excel-export,budget-manager,multi-currency,chartjs,dashboard,python3"
