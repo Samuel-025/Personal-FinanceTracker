@@ -200,6 +200,7 @@ tr:hover .td-actions{opacity:1}
       </div>
       <div class="topbar-actions">
         <span id="apiStatusBadge" class="badge" style="background:rgba(255,255,255,0.06);color:var(--color-text-muted);font-size:11px;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)</span>
+        <button class="btn btn-secondary btn-sm" onclick="resetLocalData()" title="Reset & Restore Sample Data" style="padding:4px 10px;font-size:12px">↻ Reset Data</button>
         <select id="currencySelect" class="form-select" style="padding:4px 10px;font-size:12px;width:auto;border-radius:var(--radius-full)" onchange="changeCurrency(this.value)">
           <option value="INR">🇮🇳 INR (₹)</option>
           <option value="USD">🇺🇸 USD ($)</option>
@@ -444,13 +445,24 @@ let currentCurrency="INR";
 const CURRENCY_SYMBOLS={INR:"₹",USD:"$",EUR:"€"};
 const RATES={INR:1,USD:0.012,EUR:0.011};
 
+const sanitizeTx = t => {
+  if (!t || typeof t !== "object") return null;
+  const date = t.date ? String(t.date) : "26-07-2026";
+  const amount = (typeof t.amount === "number" && !isNaN(t.amount)) ? t.amount : (parseFloat(t.amount) || 0);
+  const category = t.category ? String(t.category) : "Other Expense";
+  const description = t.description ? String(t.description) : "";
+  const currency = t.currency ? String(t.currency) : "INR";
+  const id = t.id || Math.floor(Math.random() * 10000);
+  return { id, date, amount, category, description, currency };
+};
+
 const DEFAULT_SAMPLE_TXS = [
-  { id: 1, date: "03-01-2026", amount: 250.0, category: "Groceries", description: "Groceries", currency: "INR" },
-  { id: 2, date: "03-01-2026", amount: 250.0, category: "Groceries", description: "Groceries", currency: "INR" },
-  { id: 3, date: "03-01-2026", amount: 250.0, category: "Groceries", description: "Groceries", currency: "INR" },
-  { id: 4, date: "01-01-2026", amount: 5000.0, category: "Salary", description: "Salary", currency: "INR" },
-  { id: 5, date: "01-01-2026", amount: 5000.0, category: "Salary", description: "Salary", currency: "INR" },
-  { id: 6, date: "01-01-2026", amount: 5000.0, category: "Salary", description: "Salary", currency: "INR" }
+  { id: 1, date: "26-07-2026", amount: 15000.0, category: "Salary", description: "Monthly Salary", currency: "INR" },
+  { id: 2, date: "26-07-2026", amount: 2500.0, category: "Groceries", description: "Supermarket Shopping", currency: "INR" },
+  { id: 3, date: "25-07-2026", amount: 1200.0, category: "Utilities", description: "Electricity Bill", currency: "INR" },
+  { id: 4, date: "24-07-2026", amount: 800.0, category: "Food", description: "Restaurant Dinner", currency: "INR" },
+  { id: 5, date: "20-07-2026", amount: 4500.0, category: "Freelance", description: "Web Design Project", currency: "INR" },
+  { id: 6, date: "15-07-2026", amount: 600.0, category: "Entertainment", description: "Movie Tickets", currency: "INR" }
 ];
 
 let parsedTxs = [];
@@ -459,7 +471,8 @@ try {
   parsedTxs = storedRaw ? JSON.parse(storedRaw) : [];
 } catch(e) { parsedTxs = []; }
 
-let transactions = (Array.isArray(parsedTxs) && parsedTxs.length > 0) ? parsedTxs : DEFAULT_SAMPLE_TXS;
+let cleanTxs = Array.isArray(parsedTxs) ? parsedTxs.map(sanitizeTx).filter(Boolean) : [];
+let transactions = cleanTxs.length > 0 ? cleanTxs : DEFAULT_SAMPLE_TXS.map(sanitizeTx);
 let budgets = JSON.parse(localStorage.getItem("fintrack_budgets") || "{}");
 let nextId = transactions.reduce((m, t) => Math.max(m, t.id || 0), 0) + 1, sortField = "date", sortDir = -1, pendingDeleteId = null, editingId = null, chartRange = 6;
 let lineChart, doughnutChart, barChart, incomeDonut, expenseDonut, theme = "dark";
@@ -469,6 +482,19 @@ function saveData(){
     localStorage.setItem("fintrack_txs",JSON.stringify(transactions));
     localStorage.setItem("fintrack_budgets",JSON.stringify(budgets));
   }catch(e){console.error("localStorage save failed",e)}
+}
+
+function resetLocalData(){
+  try {
+    localStorage.removeItem("fintrack_txs");
+    localStorage.removeItem("fintrack_budgets");
+  } catch(e){}
+  transactions = DEFAULT_SAMPLE_TXS.map(sanitizeTx);
+  budgets = {};
+  saveData();
+  renderDashboard();
+  renderTransactions();
+  if (typeof toast === "function") toast("Sample data restored!");
 }
 
 function changeCurrency(curr){
