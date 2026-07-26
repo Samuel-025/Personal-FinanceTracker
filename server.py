@@ -8,7 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from database import init_db, get_db, SessionLocal
@@ -49,6 +49,8 @@ app.add_middleware(
 # Pydantic Schemas
 # ---------------------------------------------------------------------------
 class TransactionSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: Optional[int] = None
     date: str
     amount: float
@@ -56,31 +58,28 @@ class TransactionSchema(BaseModel):
     description: Optional[str] = ""
     currency: Optional[str] = "INR"
 
-    class Config:
-        from_attributes = True
-
 
 class CategorySchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: Optional[int] = None
     name: str
     type: str  # "Income" or "Expense"
     color: Optional[str] = "#60a5fa"
     icon: Optional[str] = "📋"
 
-    class Config:
-        from_attributes = True
-
 
 class BudgetSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: Optional[int] = None
     category_name: str
     monthly_limit: float
 
-    class Config:
-        from_attributes = True
-
 
 class RecurringSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: Optional[int] = None
     description: str
     amount: float
@@ -88,9 +87,6 @@ class RecurringSchema(BaseModel):
     frequency: str = "monthly"  # "monthly" or "weekly"
     next_date: str
     is_active: bool = True
-
-    class Config:
-        from_attributes = True
 
 
 # ---------------------------------------------------------------------------
