@@ -206,7 +206,7 @@ def update_transaction_cli():
 
         render_transactions_table(transactions, title="Select Transaction ID to Update")
         tx_id = IntPrompt.ask("Enter Transaction ID to update")
-        tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+        tx = db.query(Transaction).filter_by(id=tx_id).first()
 
         if not tx:
             console.print("[red]Transaction ID not found.[/red]")
@@ -246,7 +246,7 @@ def delete_transaction_cli():
 
         render_transactions_table(transactions, title="Select Transaction ID to Delete")
         tx_id = IntPrompt.ask("Enter Transaction ID to delete")
-        tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+        tx = db.query(Transaction).filter_by(id=tx_id).first()
 
         if not tx:
             console.print("[red]Transaction ID not found.[/red]")
@@ -275,7 +275,7 @@ def category_manager_cli():
 
         for c in categories:
             type_style = "[green]Income[/green]" if c.type == "Income" else "[red]Expense[/red]"
-            table.add_row(str(c.id), str(c.icon), str(c.name), type_style)
+            table.add_row(str(c.id), c.icon, c.name, type_style)
 
         console.print(table)
 
@@ -338,7 +338,7 @@ def budget_manager_cli():
             console.print("[yellow]No budget goals set yet.[/yellow]")
 
         if Confirm.ask("\nDo you want to set/update a category budget?", default=False):
-            exp_cats = [str(c.name) for c in db.query(Category).filter(Category.type == "Expense").all()]
+            exp_cats = [c.name for c in db.query(Category).filter_by(type="Expense").all()]
             console.print("\nAvailable Expense Categories:")
             for idx, name in enumerate(exp_cats, 1):
                 console.print(f" {idx}. {name}")
@@ -347,7 +347,7 @@ def budget_manager_cli():
             cat_name = exp_cats[choice - 1]
             limit = FloatPrompt.ask(f"Enter monthly spending limit for {cat_name} (₹)")
 
-            b = db.query(Budget).filter(Budget.category_name == cat_name).first()
+            b = db.query(Budget).filter_by(category_name=cat_name).first()
             if b:
                 b.monthly_limit = limit
             else:
@@ -377,11 +377,11 @@ def recurring_manager_cli():
                 r_amt = float(getattr(r, "amount", 0.0))
                 table.add_row(
                     str(r.id),
-                    str(r.description),
+                    r.description,
                     f"₹{r_amt:,.2f}",
-                    str(r.category),
-                    str(r.frequency),
-                    str(r.next_date),
+                    r.category,
+                    r.frequency,
+                    r.next_date,
                 )
             console.print(table)
         else:
@@ -390,7 +390,7 @@ def recurring_manager_cli():
         if Confirm.ask("\nDo you want to add a new recurring rule?", default=False):
             desc = Prompt.ask("Enter description (e.g. Salary, Rent, Netflix)")
             amt = FloatPrompt.ask("Enter amount (₹)")
-            cats = [str(c.name) for c in db.query(Category).all()]
+            cats = [c.name for c in db.query(Category).all()]
             cat = Prompt.ask("Select category", choices=cats)
             freq = Prompt.ask("Select frequency", choices=["monthly", "weekly"], default="monthly")
             next_date = get_date("Enter next due date (dd-mm-yyyy): ")
@@ -441,8 +441,8 @@ def plot_charts_cli():
         exp_monthly = df[df["type"] == "Expense"]["amount"].resample("ME").sum()
 
         plt.figure(figsize=(10, 5))
-        plt.plot(inc_monthly.index, inc_monthly.values, label="Income", color="g", marker="o")
-        plt.plot(exp_monthly.index, exp_monthly.values, label="Expenses", color="r", marker="o")
+        plt.plot(list(inc_monthly.index), list(inc_monthly.values), label="Income", color="g", marker="o")
+        plt.plot(list(exp_monthly.index), list(exp_monthly.values), label="Expenses", color="r", marker="o")
         plt.xlabel("Month")
         plt.ylabel("Amount (₹)")
         plt.title("Monthly Income vs Expenses")
