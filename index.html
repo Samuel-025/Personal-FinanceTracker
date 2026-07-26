@@ -791,7 +791,7 @@ function renderDashboard(){
     if (!kpiGrid) return;
 
     const now = new Date();
-    const thisMonth = now.toISOString().slice(0,7);
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthly = transactions.filter(t => toIso(t.date).slice(0,7) === thisMonth);
 
     const allInc = transactions.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
@@ -871,7 +871,9 @@ function getMonthlyData(months){
 
   for(let i = numMonths - 1; i >= 0; i--){
     const d = new Date(refDate.getFullYear(), refDate.getMonth() - i, 1);
-    const m = d.toISOString().slice(0,7);
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const m = `${yr}-${mo}`;
     const label = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
     const mTx = transactions.filter(t => toIso(t.date).slice(0,7) === m);
     const inc = mTx.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
