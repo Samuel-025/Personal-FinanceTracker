@@ -133,7 +133,7 @@ def add_transaction_cli():
         cat_choice = IntPrompt.ask(
             "Select category number", choices=[str(i) for i in range(1, len(categories) + 1)]
         )
-        selected_cat = str(categories[cat_choice - 1].name)
+        selected_cat = categories[cat_choice - 1].name
 
         amount = get_amount()
         description = get_description()
@@ -173,7 +173,7 @@ def view_transactions_cli():
             filtered = []
             for t in transactions:
                 try:
-                    t_date = datetime.strptime(str(t.date), fmt)
+                    t_date = datetime.strptime(t.date, fmt)
                     if start_date and t_date < datetime.strptime(start_date, fmt):
                         continue
                     if end_date and t_date > datetime.strptime(end_date, fmt):
@@ -305,8 +305,8 @@ def budget_manager_cli():
         monthly_exp = {}
         for t in txs:
             try:
-                cat_str = str(t.category)
-                d_str = str(t.date)
+                cat_str = t.category
+                d_str = t.date
                 t_amt = float(getattr(t, "amount", 0.0))
                 if d_str[-7:] == this_month_str:
                     monthly_exp[cat_str] = monthly_exp.get(cat_str, 0.0) + t_amt
@@ -321,7 +321,7 @@ def budget_manager_cli():
             table.add_column("Status")
 
             for b in budgets:
-                cat_name_str = str(b.category_name)
+                cat_name_str = b.category_name
                 limit_val = float(getattr(b, "monthly_limit", 0.0))
                 spent = monthly_exp.get(cat_name_str, 0.0)
                 over = spent > limit_val

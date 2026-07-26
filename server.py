@@ -1,7 +1,7 @@
 import os
 import io
 import csv
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query, status
@@ -352,6 +352,7 @@ def export_excel(db: Session = Depends(get_db)):
 
     wb = Workbook()
     ws = wb.active
+    assert ws is not None
     ws.title = "Transactions Report"
 
     # Header styles
@@ -414,7 +415,7 @@ def export_pdf(db: Session = Depends(get_db)):
         topMargin=36,
         bottomMargin=36,
     )
-    elements = []
+    elements: list[Any] = []
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
