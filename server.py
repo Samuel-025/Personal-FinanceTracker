@@ -1,6 +1,7 @@
 import os
 import io
 import csv
+import calendar
 from typing import List, Optional, Any
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -222,6 +223,26 @@ def delete_category(cat_id: int, db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.id == cat_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Check referential integrity across dependent tables
+    has_tx = db.query(Transaction).filter(Transaction.category == cat.name).first()
+    has_budget = db.query(Budget).filter(Budget.category_name == cat.name).first()
+    has_recurring = db.query(RecurringRule).filter(RecurringRule.category == cat.name).first()
+
+    if has_tx or has_budget or has_recurring:
+        referenced_in = []
+        if has_tx:
+            referenced_in.append("transactions")
+        if has_budget:
+            referenced_in.append("budgets")
+        if has_recurring:
+            referenced_in.append("recurring rules")
+        refs_str = ", ".join(referenced_in)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete category '{cat.name}' because it is referenced by existing {refs_str}."
+        )
+
     db.delete(cat)
     db.commit()
     return {"message": "Category deleted successfully"}
@@ -309,6 +330,7 @@ def process_recurring(db: Session = Depends(get_db)):
     for rule in rules:
         try:
             next_dt = datetime.strptime(rule.next_date, "%d-%m-%Y")
+            orig_day = next_dt.day
             while next_dt <= today_dt:
                 # Add transaction
                 tx = Transaction(
@@ -325,10 +347,10 @@ def process_recurring(db: Session = Depends(get_db)):
                 if rule.frequency == "weekly":
                     next_dt += timedelta(days=7)
                 else:  # monthly
-                    # Add ~30 days
                     month = next_dt.month % 12 + 1
                     year = next_dt.year + (next_dt.month // 12)
-                    day = min(next_dt.day, 28)
+                    max_days = calendar.monthrange(year, month)[1]
+                    day = min(orig_day, max_days)
                     next_dt = datetime(year, month, day)
 
             rule.next_date = next_dt.strftime("%d-%m-%Y")

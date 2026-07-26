@@ -431,7 +431,7 @@ tr:hover .td-actions{opacity:1}
 <script>
 const INCOME_CATS=["Salary","Freelance","Investment","Business","Other Income"];
 const EXPENSE_CATS=["Food","Transport","Housing","Utilities","Healthcare","Entertainment","Shopping","Education","Travel","Other Expense"];
-const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Food:"🍽",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
+const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Groceries:"🛒",Food:"🍽",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
 
 const getApiBase = () => {
   if (typeof window !== "undefined" && window.location && window.location.protocol.startsWith("http")) {
@@ -566,8 +566,8 @@ async function checkApiStatus(){
           if(Array.isArray(apiTxs)){
             transactions=apiTxs.map(sanitizeTx).filter(Boolean);
             saveData();
-            try { renderDashboard(); } catch(e){}
-            try { renderTransactions(); } catch(e){}
+            try { renderDashboard(); } catch(e){ console.error("renderDashboard failed:", e); }
+            try { renderTransactions(); } catch(e){ console.error("renderTransactions failed:", e); }
           }
         } catch(e) {
           console.error("API data processing error:", e);
@@ -583,8 +583,8 @@ async function checkApiStatus(){
   badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)';
   badge.style.background="rgba(255,255,255,0.06)";
   badge.style.color="var(--color-text-muted)";
-  try { renderDashboard(); } catch(e){}
-  try { renderTransactions(); } catch(e){}
+  try { renderDashboard(); } catch(e){ console.error("renderDashboard failed:", e); }
+  try { renderTransactions(); } catch(e){ console.error("renderTransactions failed:", e); }
 }
 
 const toIso = dStr => {

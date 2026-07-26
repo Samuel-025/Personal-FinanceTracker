@@ -1,6 +1,7 @@
 import os
 import csv
 import sys
+from typing import Optional
 from datetime import datetime
 import pandas as pd
 from sqlalchemy import create_engine
@@ -26,6 +27,7 @@ DEFAULT_CATEGORIES = [
     {"name": "Investment", "type": "Income", "color": "#a78bfa", "icon": "📈"},
     {"name": "Business", "type": "Income", "color": "#fbbf24", "icon": "🏪"},
     {"name": "Other Income", "type": "Income", "color": "#34d399", "icon": "💰"},
+    {"name": "Groceries", "type": "Expense", "color": "#34d399", "icon": "🛒"},
     {"name": "Food", "type": "Expense", "color": "#f87171", "icon": "🍽"},
     {"name": "Transport", "type": "Expense", "color": "#fb923c", "icon": "🚗"},
     {"name": "Housing", "type": "Expense", "color": "#f472b6", "icon": "🏠"},
@@ -37,6 +39,20 @@ DEFAULT_CATEGORIES = [
     {"name": "Travel", "type": "Expense", "color": "#2dd4bf", "icon": "✈"},
     {"name": "Other Expense", "type": "Expense", "color": "#9ca3af", "icon": "📋"},
 ]
+
+
+def normalize_date(date_str: str) -> Optional[str]:
+    if not date_str or pd.isna(date_str):
+        return None
+    raw = str(date_str).strip()
+    formats = ["%d-%m-%Y", "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return dt.strftime("%d-%m-%Y")
+        except ValueError:
+            pass
+    return None
 
 
 def init_db():
@@ -55,7 +71,13 @@ def init_db():
             try:
                 df = pd.read_csv(csv_path)
                 if not df.empty and "date" in df.columns:
-                    for _, row in df.iterrows():
+                    for idx, row in df.iterrows():
+                        raw_date = row.get("date")
+                        norm_date = normalize_date(raw_date)
+                        if not norm_date:
+                            print(f"Warning: Skipping CSV row {idx+1} due to unparseable date '{raw_date}'")
+                            continue
+
                         desc = str(row.get("description", ""))
                         if desc == "nan" or pd.isna(desc):
                             desc = ""
@@ -70,7 +92,7 @@ def init_db():
                             cat_name = "Other Expense"
 
                         tx = Transaction(
-                            date=str(row["date"]),
+                            date=norm_date,
                             amount=float(row["amount"]),
                             category=cat_name,
                             description=desc,
@@ -98,23 +120,6 @@ def init_db():
                     normalized = True
         if normalized:
             db.commit()
-
-        # Ensure active sample transactions for current month exist in database
-        today_str = datetime.now().strftime("%d-%m-%Y")
-        today_month = datetime.now().strftime("%m-%Y")
-        has_current_month = any(str(t.date).endswith(today_month) for t in txs)
-
-        if not has_current_month:
-            samples = [
-                Transaction(date=today_str, amount=15000.0, category="Salary", description="Monthly Salary", currency="INR"),
-                Transaction(date=today_str, amount=2500.0, category="Groceries", description="Supermarket Shopping", currency="INR"),
-                Transaction(date=today_str, amount=1200.0, category="Utilities", description="Electricity Bill", currency="INR"),
-                Transaction(date=today_str, amount=800.0, category="Food", description="Restaurant Dinner", currency="INR"),
-            ]
-            for sample in samples:
-                db.add(sample)
-            db.commit()
-            print("Seeded active current month transactions into SQLite database!")
     finally:
         db.close()
 

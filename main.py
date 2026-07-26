@@ -47,26 +47,22 @@ def display_header():
 
 
 def print_kpis(transactions, categories):
-    db = get_db_session()
-    try:
-        income_cats = [str(c.name) for c in categories if c.type == "Income"]
-        total_inc = sum(float(getattr(t, "amount", 0.0)) for t in transactions if t.category in income_cats)
-        total_exp = sum(float(getattr(t, "amount", 0.0)) for t in transactions if t.category not in income_cats)
-        net_savings = total_inc - total_exp
+    income_cats = [str(c.name) for c in categories if c.type == "Income"]
+    total_inc = sum(float(getattr(t, "amount", 0.0)) for t in transactions if t.category in income_cats)
+    total_exp = sum(float(getattr(t, "amount", 0.0)) for t in transactions if t.category not in income_cats)
+    net_savings = total_inc - total_exp
 
-        savings_style = "bold green" if net_savings >= 0 else "bold red"
+    savings_style = "bold green" if net_savings >= 0 else "bold red"
 
-        kpi_text = Text()
-        kpi_text.append(f" Total Income:  ₹{total_inc:,.2f}  ", style="bold green")
-        kpi_text.append(f"│  Total Expense: ₹{total_exp:,.2f}  ", style="bold red")
-        kpi_text.append(f"│  Net Savings: ₹{net_savings:,.2f}", style=savings_style)
+    kpi_text = Text()
+    kpi_text.append(f" Total Income:  ₹{total_inc:,.2f}  ", style="bold green")
+    kpi_text.append(f"│  Total Expense: ₹{total_exp:,.2f}  ", style="bold red")
+    kpi_text.append(f"│  Net Savings: ₹{net_savings:,.2f}", style=savings_style)
 
-        console.print(Panel(kpi_text, title="Financial Summary", border_style="blue"))
-    finally:
-        db.close()
+    console.print(Panel(kpi_text, title="Financial Summary", border_style="blue"))
 
 
-def render_transactions_table(transactions, title="Transactions"):
+def render_transactions_table(transactions, categories=None, title="Transactions"):
     if not transactions:
         console.print(Panel("[yellow]No transactions found.[/yellow]", border_style="yellow"))
         return
@@ -79,31 +75,32 @@ def render_transactions_table(transactions, title="Transactions"):
     table.add_column("Amount", justify="right")
     table.add_column("Description", style="italic")
 
-    db = get_db_session()
-    try:
-        categories = db.query(Category).all()
-        income_cats = [c.name for c in categories if c.type == "Income"]
+    if categories is None:
+        db = get_db_session()
+        try:
+            categories = db.query(Category).all()
+        finally:
+            db.close()
 
-        for t in transactions:
-            is_inc = t.category in income_cats
-            type_str = "Income" if is_inc else "Expense"
-            type_style = "[green]Income[/green]" if is_inc else "[red]Expense[/red]"
-            sym = CURRENCY_SYMBOLS.get(str(t.currency or "INR"), "₹")
-            amt = float(t.amount)
-            amt_str = f"[green]+{sym}{amt:,.2f}[/green]" if is_inc else f"[red]-{sym}{amt:,.2f}[/red]"
+    income_cats = [c.name for c in categories if c.type == "Income"]
 
-            table.add_row(
-                str(t.id),
-                str(t.date),
-                str(t.category),
-                type_style,
-                amt_str,
-                str(t.description or "-"),
-            )
+    for t in transactions:
+        is_inc = t.category in income_cats
+        type_style = "[green]Income[/green]" if is_inc else "[red]Expense[/red]"
+        sym = CURRENCY_SYMBOLS.get(str(t.currency or "INR"), "₹")
+        amt = float(t.amount)
+        amt_str = f"[green]+{sym}{amt:,.2f}[/green]" if is_inc else f"[red]-{sym}{amt:,.2f}[/red]"
 
-        console.print(table)
-    finally:
-        db.close()
+        table.add_row(
+            str(t.id),
+            str(t.date),
+            str(t.category),
+            type_style,
+            amt_str,
+            str(t.description or "-"),
+        )
+
+    console.print(table)
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +187,7 @@ def view_transactions_cli():
             pass
 
         print_kpis(transactions, categories)
-        render_transactions_table(transactions)
+        render_transactions_table(transactions, categories=categories)
     finally:
         db.close()
 
@@ -200,11 +197,12 @@ def update_transaction_cli():
     db = get_db_session()
     try:
         transactions = db.query(Transaction).all()
+        categories = db.query(Category).all()
         if not transactions:
             console.print("[yellow]No transactions available to update.[/yellow]")
             return
 
-        render_transactions_table(transactions, title="Select Transaction ID to Update")
+        render_transactions_table(transactions, categories=categories, title="Select Transaction ID to Update")
         tx_id = IntPrompt.ask("Enter Transaction ID to update")
         tx = db.query(Transaction).filter_by(id=tx_id).first()
 
@@ -221,7 +219,11 @@ def update_transaction_cli():
         new_amount_str = Prompt.ask("New amount or press Enter to keep current", default=str(tx_amt))
         try:
             new_amount = float(new_amount_str)
+            if new_amount <= 0:
+                console.print("[red]Amount must be a positive number greater than 0. Keeping previous amount.[/red]")
+                new_amount = tx_amt
         except ValueError:
+            console.print("[red]Invalid numerical amount. Keeping previous amount.[/red]")
             new_amount = tx_amt
 
         new_desc = Prompt.ask("New description or press Enter to keep current", default=tx_desc)
