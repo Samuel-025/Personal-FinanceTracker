@@ -199,6 +199,12 @@ tr:hover .td-actions{opacity:1}
         <div class="page-title" id="pageTitle">Dashboard</div>
       </div>
       <div class="topbar-actions">
+        <span id="apiStatusBadge" class="badge" style="background:rgba(255,255,255,0.06);color:var(--color-text-muted);font-size:11px;display:flex;align-items:center;gap:4px">Checking API…</span>
+        <select id="currencySelect" class="form-select" style="padding:4px 10px;font-size:12px;width:auto;border-radius:var(--radius-full)" onchange="changeCurrency(this.value)">
+          <option value="INR">🇮🇳 INR (₹)</option>
+          <option value="USD">🇺🇸 USD ($)</option>
+          <option value="EUR">🇪🇺 EUR (€)</option>
+        </select>
         <div class="search-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input type="text" class="search-input" placeholder="Search transactions…" id="globalSearch" oninput="handleSearch(this.value)">
@@ -288,10 +294,18 @@ tr:hover .td-actions{opacity:1}
         <div class="card">
           <div class="card-header">
             <div class="card-title">All Transactions</div>
-            <button class="btn btn-secondary btn-sm" onclick="exportCSV()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Export CSV
-            </button>
+            <div style="display:flex;gap:var(--space-2)">
+              <button class="btn btn-secondary btn-sm" onclick="exportPDF()">
+                📄 PDF Report
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="exportExcel()">
+                📊 Excel
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="exportCSV()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                CSV
+              </button>
+            </div>
           </div>
           <div class="filter-bar" style="margin-bottom:var(--space-5)">
             <div class="form-group" style="min-width:120px"><label class="form-label">From</label><input type="date" class="form-input" id="filterFrom" oninput="renderTransactions()"></div>
@@ -417,20 +431,65 @@ tr:hover .td-actions{opacity:1}
 const INCOME_CATS=["Salary","Freelance","Investment","Business","Other Income"];
 const EXPENSE_CATS=["Food","Transport","Housing","Utilities","Healthcare","Entertainment","Shopping","Education","Travel","Other Expense"];
 const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Food:"🍽",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
+
+const API_BASE="http://localhost:8000/api";
+let isApiOnline=false;
+let currentCurrency="INR";
+const CURRENCY_SYMBOLS={INR:"₹",USD:"$",EUR:"€"};
+const RATES={INR:1,USD:0.012,EUR:0.011};
+
 let transactions=JSON.parse(localStorage.getItem("fintrack_txs")||"[]");
 let budgets=JSON.parse(localStorage.getItem("fintrack_budgets")||"{}");
 let nextId=transactions.reduce((m,t)=>Math.max(m,t.id||0),0)+1,sortField="date",sortDir=-1,pendingDeleteId=null,editingId=null,chartRange=6;
 let lineChart,doughnutChart,barChart,incomeDonut,expenseDonut,theme="dark";
+
 function saveData(){
   try{
     localStorage.setItem("fintrack_txs",JSON.stringify(transactions));
     localStorage.setItem("fintrack_budgets",JSON.stringify(budgets));
   }catch(e){console.error("localStorage save failed",e)}
 }
-const fmt=n=>"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function changeCurrency(curr){
+  currentCurrency=curr;
+  rebuildCharts();
+  renderDashboard();
+  renderTransactions();
+}
+
+const fmt=n=>{
+  const converted=n*(RATES[currentCurrency]||1);
+  const sym=CURRENCY_SYMBOLS[currentCurrency]||"₹";
+  return sym+Math.abs(converted).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+};
+
 const fmtDate=s=>{if(!s)return "";const d=new Date(s+"T00:00:00");return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})};
 const isIncome=cat=>INCOME_CATS.includes(cat);
 const getType=cat=>isIncome(cat)?"Income":"Expense";
+
+async function checkApiStatus(){
+  const badge=document.getElementById("apiStatusBadge");
+  try{
+    const res=await fetch(`${API_BASE}/transactions`,{signal:AbortSignal.timeout(2000)});
+    if(res.ok){
+      isApiOnline=true;
+      badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ade80"></span> API Connected (SQLite)';
+      badge.style.background="var(--color-primary-highlight)";
+      badge.style.color="var(--color-income)";
+      const apiTxs=await res.json();
+      if(apiTxs.length>0){
+        transactions=apiTxs;
+        saveData();
+        renderDashboard();
+      }
+    }
+  }catch(e){
+    isApiOnline=false;
+    badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)';
+    badge.style.background="rgba(255,255,255,0.06)";
+    badge.style.color="var(--color-text-muted)";
+  }
+}
 function getFilteredTx(){
   const from=document.getElementById("filterFrom").value,to=document.getElementById("filterTo").value;
   const type=document.getElementById("filterType").value,cat=document.getElementById("filterCategory").value;
@@ -542,6 +601,22 @@ function clearFilters(){document.getElementById("filterFrom").value="";document.
 function handleSearch(q){
   if(document.getElementById("view-transactions").classList.contains("active"))renderTransactions();
   if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
+}
+function exportPDF(){
+  if(isApiOnline){
+    window.open(`${API_BASE}/export/pdf`,"_blank");
+    toast("Generating PDF report...");
+  }else{
+    toast("PDF Export requires active API backend server","error");
+  }
+}
+function exportExcel(){
+  if(isApiOnline){
+    window.open(`${API_BASE}/export/excel`,"_blank");
+    toast("Downloading Excel report...");
+  }else{
+    toast("Excel Export requires active API backend server","error");
+  }
 }
 function exportCSV(){
   const data=getFilteredTx();
@@ -714,6 +789,7 @@ function rebuildCharts(){
 }
 document.getElementById("inp-date").value=new Date().toISOString().split("T")[0];
 renderDashboard();
+checkApiStatus();
 lucide.createIcons();
 </script>
 </body>

@@ -1,9 +1,22 @@
-import pandas as pd
-import csv
 import sys
+import os
 from datetime import datetime
-from data_entry import get_amount, get_category, get_date, get_description
+import pandas as pd
 import matplotlib.pyplot as plt
+
+# Rich Terminal UI Imports
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.prompt import Prompt, Confirm, FloatPrompt, IntPrompt
+from rich.text import Text
+from rich.align import Align
+from rich import print as rprint
+
+# Local DB & Model Imports
+from database import init_db, SessionLocal
+from models import Transaction, Category, Budget, RecurringRule
+from data_entry import get_date, get_amount, get_description
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -11,288 +24,513 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+console = Console()
+CURRENCY_SYMBOLS = {"INR": "₹", "USD": "$", "EUR": "€"}
 
-class CSV:
-    CSV_FILE = "finance_data.csv"
-    COLUMNS = ["date", "amount", "category", "description"]
-    FORMAT = "%d-%m-%Y"
 
-    @classmethod
-    def initialize_csv(cls):
-        try:
-            pd.read_csv(cls.CSV_FILE)
-        except (FileNotFoundError, pd.errors.EmptyDataError):
-            df = pd.DataFrame(columns=cls.COLUMNS)
-            df.to_csv(cls.CSV_FILE, index=False)
+def get_db_session():
+    return SessionLocal()
 
-    @classmethod
-    def add_entry(cls, date, amount, category, description):
-        cls.initialize_csv()
-        new_entry = {
-            "date": date,
-            "amount": amount,
-            "category": category,
-            "description": description,
-        }
-        with open(cls.CSV_FILE, "a", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=cls.COLUMNS)
-            writer.writerow(new_entry)
-        cls.sort_csv_by_date()
-        print("Entry added successfully.")
 
-    @classmethod
-    def sort_csv_by_date(cls):
-        """Sort CSV by date descending. Preserves string format to avoid corruption."""
-        cls.initialize_csv()
-        df = pd.read_csv(cls.CSV_FILE)
-        if df.empty:
-            return
-        df["date"] = pd.to_datetime(df["date"], format=cls.FORMAT, dayfirst=True)
-        df.sort_values(by="date", ascending=False, inplace=True)
-        df["date"] = df["date"].apply(
-            lambda x: x.strftime(cls.FORMAT) if hasattr(x, "strftime") else str(x)
+# ---------------------------------------------------------------------------
+# CLI Helpers & Rendering
+# ---------------------------------------------------------------------------
+def display_header():
+    console.print(
+        Panel.fit(
+            "[bold green]💰 Personal Finance Tracker V2[/bold green]\n"
+            "[dim]Unified SQLite Backend & Rich Terminal Interface[/dim]",
+            border_style="green",
+            padding=(1, 4),
         )
-        df.to_csv(cls.CSV_FILE, index=False)
+    )
 
-    @classmethod
-    def get_transactions(cls, start_date, end_date):
-        cls.initialize_csv()
-        df = pd.read_csv(cls.CSV_FILE)
-        if df.empty:
-            print("No transactions found in the given date range.")
-            return df
-        df["date"] = pd.to_datetime(df["date"], format=cls.FORMAT, dayfirst=True)
-        start_dt = datetime.strptime(start_date, cls.FORMAT)
-        end_dt = datetime.strptime(end_date, cls.FORMAT)
-        mask = (df["date"] >= start_dt) & (df["date"] <= end_dt)
-        filtered_df = df.loc[mask]
 
-        if filtered_df.empty:
-            print("No transactions found in the given date range.")
-        else:
-            print(
-                f"Transactions from {start_dt.strftime(cls.FORMAT)} "
-                f"to {end_dt.strftime(cls.FORMAT)}"
+def print_kpis(transactions, categories):
+    db = get_db_session()
+    try:
+        income_cats = [c.name for c in categories if c.type == "Income"]
+        total_inc = sum(t.amount for t in transactions if t.category in income_cats)
+        total_exp = sum(t.amount for t in transactions if t.category not in income_cats)
+        net_savings = total_inc - total_exp
+
+        savings_style = "bold green" if net_savings >= 0 else "bold red"
+
+        kpi_text = Text()
+        kpi_text.append(f" Total Income:  ₹{total_inc:,.2f}  ", style="bold green")
+        kpi_text.append(f"│  Total Expense: ₹{total_exp:,.2f}  ", style="bold red")
+        kpi_text.append(f"│  Net Savings: ₹{net_savings:,.2f}", style=savings_style)
+
+        console.print(Panel(kpi_text, title="Financial Summary", border_style="blue"))
+    finally:
+        db.close()
+
+
+def render_transactions_table(transactions, title="Transactions"):
+    if not transactions:
+        console.print(Panel("[yellow]No transactions found.[/yellow]", border_style="yellow"))
+        return
+
+    table = Table(title=title, show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="dim", width=6)
+    table.add_column("Date", style="cyan", width=12)
+    table.add_column("Category", style="yellow")
+    table.add_column("Type", style="bold")
+    table.add_column("Amount", justify="right")
+    table.add_column("Description", style="italic")
+
+    db = get_db_session()
+    try:
+        categories = db.query(Category).all()
+        income_cats = [c.name for c in categories if c.type == "Income"]
+
+        for t in transactions:
+            is_inc = t.category in income_cats
+            type_str = "Income" if is_inc else "Expense"
+            type_style = "[green]Income[/green]" if is_inc else "[red]Expense[/red]"
+            sym = CURRENCY_SYMBOLS.get(t.currency or "INR", "₹")
+            amt_str = f"[green]+{sym}{t.amount:,.2f}[/green]" if is_inc else f"[red]-{sym}{t.amount:,.2f}[/red]"
+
+            table.add_row(
+                str(t.id),
+                t.date,
+                t.category,
+                type_style,
+                amt_str,
+                t.description or "-",
             )
-            display_df = filtered_df.copy()
-            display_df["date"] = display_df["date"].apply(
-                lambda x: x.strftime(cls.FORMAT) if hasattr(x, "strftime") else str(x)
-            )
-            print(display_df.to_string(index=False))
-            total_income = filtered_df[filtered_df["category"] == "Income"]["amount"].sum()
-            total_expense = filtered_df[filtered_df["category"] == "Expense"]["amount"].sum()
-            print(f"Total Income:  ₹{total_income:.2f}")
-            print(f"Total Expense: ₹{total_expense:.2f}")
-            print(f"Net Savings:   ₹{total_income - total_expense:.2f}")
 
-        return filtered_df
+        console.print(table)
+    finally:
+        db.close()
 
-    @classmethod
-    def delete_entry(cls, date, description):
-        cls.initialize_csv()
-        df = pd.read_csv(cls.CSV_FILE)
-        if df.empty:
-            print("No matching entry found to delete.")
+
+# ---------------------------------------------------------------------------
+# Menu Handlers
+# ---------------------------------------------------------------------------
+def add_transaction_cli():
+    console.rule("[bold green]Add New Transaction[/bold green]")
+    db = get_db_session()
+    try:
+        categories = db.query(Category).all()
+        if not categories:
+            console.print("[red]No categories found. Initializing database...[/red]")
+            init_db()
+            categories = db.query(Category).all()
+
+        date = get_date(
+            "Enter date (dd-mm-yyyy) or press Enter for today: ",
+            allow_default=True,
+        )
+
+        # Select Category
+        console.print("\n[bold cyan]Available Categories:[/bold cyan]")
+        for idx, cat in enumerate(categories, 1):
+            type_tag = f"[green]{cat.type}[/green]" if cat.type == "Income" else f"[red]{cat.type}[/red]"
+            console.print(f" {idx}. {cat.icon} {cat.name} ({type_tag})")
+
+        cat_choice = IntPrompt.ask(
+            "Select category number", choices=[str(i) for i in range(1, len(categories) + 1)]
+        )
+        selected_cat = categories[cat_choice - 1].name
+
+        amount = get_amount()
+        description = get_description()
+
+        currency = Prompt.ask("Select Currency", choices=["INR", "USD", "EUR"], default="INR")
+
+        tx = Transaction(
+            date=date,
+            amount=amount,
+            category=selected_cat,
+            description=description,
+            currency=currency,
+        )
+        db.add(tx)
+        db.commit()
+        console.print(f"[bold green]✓ Added transaction of ₹{amount:,.2f} under {selected_cat}![/bold green]")
+    finally:
+        db.close()
+
+
+def view_transactions_cli():
+    console.rule("[bold cyan]View Transactions & Summary[/bold cyan]")
+    db = get_db_session()
+    try:
+        categories = db.query(Category).all()
+        use_filter = Confirm.ask("Do you want to filter by date range?", default=False)
+        
+        start_date = None
+        end_date = None
+        if use_filter:
+            start_date = get_date("Enter start date (dd-mm-yyyy): ")
+            end_date = get_date("Enter end date (dd-mm-yyyy): ")
+
+        transactions = db.query(Transaction).all()
+        if start_date or end_date:
+            fmt = "%d-%m-%Y"
+            filtered = []
+            for t in transactions:
+                try:
+                    t_date = datetime.strptime(t.date, fmt)
+                    if start_date and t_date < datetime.strptime(start_date, fmt):
+                        continue
+                    if end_date and t_date > datetime.strptime(end_date, fmt):
+                        continue
+                    filtered.append(t)
+                except ValueError:
+                    filtered.append(t)
+            transactions = filtered
+
+        # Sort descending by date
+        try:
+            transactions.sort(key=lambda x: datetime.strptime(x.date, "%d-%m-%Y"), reverse=True)
+        except Exception:
+            pass
+
+        print_kpis(transactions, categories)
+        render_transactions_table(transactions)
+    finally:
+        db.close()
+
+
+def update_transaction_cli():
+    console.rule("[bold yellow]Update Transaction[/bold yellow]")
+    db = get_db_session()
+    try:
+        transactions = db.query(Transaction).all()
+        if not transactions:
+            console.print("[yellow]No transactions available to update.[/yellow]")
             return
-        df["date"] = pd.to_datetime(df["date"], format=cls.FORMAT, dayfirst=True)
-        date_dt = datetime.strptime(date, cls.FORMAT)
-        # Handle NaN descriptions read from empty CSV cells
-        desc_clean = df["description"].fillna("")
-        mask = (df["date"] == date_dt) & (desc_clean == description)
-        if mask.any():
-            df = df[~mask]
-            if not df.empty:
-                df["date"] = df["date"].apply(
-                    lambda x: x.strftime(cls.FORMAT) if hasattr(x, "strftime") else str(x)
+
+        render_transactions_table(transactions, title="Select Transaction ID to Update")
+        tx_id = IntPrompt.ask("Enter Transaction ID to update")
+        tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+
+        if not tx:
+            console.print("[red]Transaction ID not found.[/red]")
+            return
+
+        console.print(f"\n[dim]Updating Transaction #{tx.id} ({tx.date} - ₹{tx.amount})[/dim]")
+        new_date = Prompt.ask("New date (dd-mm-yyyy) or press Enter to keep current", default=tx.date)
+        new_amount_str = Prompt.ask("New amount or press Enter to keep current", default=str(tx.amount))
+        try:
+            new_amount = float(new_amount_str)
+        except ValueError:
+            new_amount = tx.amount
+
+        new_desc = Prompt.ask("New description or press Enter to keep current", default=tx.description or "")
+
+        tx.date = new_date
+        tx.amount = new_amount
+        tx.description = new_desc
+        db.commit()
+        console.print("[bold green]✓ Transaction updated successfully![/bold green]")
+    finally:
+        db.close()
+
+
+def delete_transaction_cli():
+    console.rule("[bold red]Delete Transaction[/bold red]")
+    db = get_db_session()
+    try:
+        transactions = db.query(Transaction).all()
+        if not transactions:
+            console.print("[yellow]No transactions available to delete.[/yellow]")
+            return
+
+        render_transactions_table(transactions, title="Select Transaction ID to Delete")
+        tx_id = IntPrompt.ask("Enter Transaction ID to delete")
+        tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
+
+        if not tx:
+            console.print("[red]Transaction ID not found.[/red]")
+            return
+
+        if Confirm.ask(f"Are you sure you want to delete transaction #{tx.id} ({tx.category} ₹{tx.amount})?"):
+            db.delete(tx)
+            db.commit()
+            console.print("[bold green]✓ Transaction deleted successfully![/bold green]")
+    finally:
+        db.close()
+
+
+def category_manager_cli():
+    console.rule("[bold magenta]Category Manager[/bold magenta]")
+    db = get_db_session()
+    try:
+        categories = db.query(Category).all()
+        table = Table(title="Categories", show_header=True, header_style="bold magenta")
+        table.add_column("ID", width=4)
+        table.add_column("Icon", width=6)
+        table.add_column("Category Name", style="bold")
+        table.add_column("Type", style="cyan")
+
+        for c in categories:
+            type_style = "[green]Income[/green]" if c.type == "Income" else "[red]Expense[/red]"
+            table.add_row(str(c.id), c.icon, c.name, type_style)
+
+        console.print(table)
+
+        if Confirm.ask("\nDo you want to add a new custom category?", default=False):
+            cat_name = Prompt.ask("Enter category name").strip()
+            cat_type = Prompt.ask("Select category type", choices=["Income", "Expense"])
+            icon = Prompt.ask("Enter emoji icon for category", default="📋")
+            color = Prompt.ask("Enter hex color (e.g. #60a5fa)", default="#60a5fa")
+
+            new_cat = Category(name=cat_name, type=cat_type, icon=icon, color=color)
+            db.add(new_cat)
+            db.commit()
+            console.print(f"[bold green]✓ Category '{cat_name}' added successfully![/bold green]")
+    finally:
+        db.close()
+
+
+def budget_manager_cli():
+    console.rule("[bold blue]Budget Goals Manager[/bold blue]")
+    db = get_db_session()
+    try:
+        budgets = db.query(Budget).all()
+        now = datetime.now()
+        this_month_str = now.strftime("%m-%Y")
+
+        txs = db.query(Transaction).all()
+        monthly_exp = {}
+        for t in txs:
+            try:
+                if t.date[-7:] == this_month_str:
+                    monthly_exp[t.category] = monthly_exp.get(t.category, 0.0) + t.amount
+            except Exception:
+                pass
+
+        if budgets:
+            table = Table(title="Monthly Category Budgets", show_header=True)
+            table.add_column("Category", style="bold")
+            table.add_column("Monthly Limit", justify="right")
+            table.add_column("Spent This Month", justify="right")
+            table.add_column("Status")
+
+            for b in budgets:
+                spent = monthly_exp.get(b.category_name, 0.0)
+                over = spent > b.monthly_limit
+                pct = min(int((spent / b.monthly_limit) * 100), 100) if b.monthly_limit > 0 else 0
+                status_str = f"[red]OVER BUDGET! ({pct}%)[/red]" if over else f"[green]{pct}% used[/green]"
+                table.add_row(
+                    b.category_name,
+                    f"₹{b.monthly_limit:,.2f}",
+                    f"₹{spent:,.2f}",
+                    status_str,
                 )
-            df.to_csv(cls.CSV_FILE, index=False)
-            print("Entry deleted successfully.")
+            console.print(table)
         else:
-            print("No matching entry found to delete.")
+            console.print("[yellow]No budget goals set yet.[/yellow]")
 
-    @classmethod
-    def update_entry(
-        cls,
-        date,
-        description,
-        new_amount=None,
-        new_category=None,
-        new_description=None,
-    ):
-        cls.initialize_csv()
-        df = pd.read_csv(cls.CSV_FILE)
-        if df.empty:
-            print("No matching entry found to update.")
-            return
-        df["date"] = pd.to_datetime(df["date"], format=cls.FORMAT, dayfirst=True)
-        date_dt = datetime.strptime(date, cls.FORMAT)
-        desc_clean = df["description"].fillna("")
-        mask = (df["date"] == date_dt) & (desc_clean == description)
-        if mask.any():
-            if new_amount is not None:
-                df.loc[mask, "amount"] = new_amount
-            if new_category is not None:
-                df.loc[mask, "category"] = new_category
-            if new_description is not None:
-                df.loc[mask, "description"] = new_description
-            df["date"] = df["date"].apply(
-                lambda x: x.strftime(cls.FORMAT) if hasattr(x, "strftime") else str(x)
+        if Confirm.ask("\nDo you want to set/update a category budget?", default=False):
+            exp_cats = [c.name for c in db.query(Category).filter(Category.type == "Expense").all()]
+            console.print("\nAvailable Expense Categories:")
+            for idx, name in enumerate(exp_cats, 1):
+                console.print(f" {idx}. {name}")
+
+            choice = IntPrompt.ask("Select category number", choices=[str(i) for i in range(1, len(exp_cats) + 1)])
+            cat_name = exp_cats[choice - 1]
+            limit = FloatPrompt.ask(f"Enter monthly spending limit for {cat_name} (₹)")
+
+            b = db.query(Budget).filter(Budget.category_name == cat_name).first()
+            if b:
+                b.monthly_limit = limit
+            else:
+                b = Budget(category_name=cat_name, monthly_limit=limit)
+                db.add(b)
+            db.commit()
+            console.print(f"[bold green]✓ Monthly budget set for {cat_name}: ₹{limit:,.2f}[/bold green]")
+    finally:
+        db.close()
+
+
+def recurring_manager_cli():
+    console.rule("[bold cyan]Recurring Transactions Manager[/bold cyan]")
+    db = get_db_session()
+    try:
+        rules = db.query(RecurringRule).all()
+        if rules:
+            table = Table(title="Active Recurring Rules", show_header=True)
+            table.add_column("ID", width=4)
+            table.add_column("Description", style="bold")
+            table.add_column("Amount", justify="right")
+            table.add_column("Category")
+            table.add_column("Frequency")
+            table.add_column("Next Due Date")
+
+            for r in rules:
+                table.add_row(
+                    str(r.id),
+                    r.description,
+                    f"₹{r.amount:,.2f}",
+                    r.category,
+                    r.frequency,
+                    r.next_date,
+                )
+            console.print(table)
+        else:
+            console.print("[yellow]No recurring transaction rules defined.[/yellow]")
+
+        if Confirm.ask("\nDo you want to add a new recurring rule?", default=False):
+            desc = Prompt.ask("Enter description (e.g. Salary, Rent, Netflix)")
+            amt = FloatPrompt.ask("Enter amount (₹)")
+            cats = [c.name for c in db.query(Category).all()]
+            cat = Prompt.ask("Select category", choices=cats)
+            freq = Prompt.ask("Select frequency", choices=["monthly", "weekly"], default="monthly")
+            next_date = get_date("Enter next due date (dd-mm-yyyy): ")
+
+            rule = RecurringRule(
+                description=desc,
+                amount=amt,
+                category=cat,
+                frequency=freq,
+                next_date=next_date,
             )
-            df.to_csv(cls.CSV_FILE, index=False)
-            print("Entry updated successfully.")
-        else:
-            print("No matching entry found to update.")
-
-    @classmethod
-    def export_csv(cls, export_path):
-        cls.initialize_csv()
-        df = pd.read_csv(cls.CSV_FILE)
-        df.to_csv(export_path, index=False)
-        print(f"CSV exported to {export_path}")
+            db.add(rule)
+            db.commit()
+            console.print(f"[bold green]✓ Recurring rule '{desc}' added![/bold green]")
+    finally:
+        db.close()
 
 
-def add():
-    CSV.initialize_csv()
-    date = get_date(
-        "Enter the date of the transaction (dd-mm-yyyy) or press Enter for today: ",
-        allow_default=True,
-    )
-    amount = get_amount()
-    category = get_category()
-    description = get_description()
-    CSV.add_entry(date, amount, category, description)
+def plot_charts_cli():
+    console.rule("[bold blue]Visual Analytics Charts[/bold blue]")
+    db = get_db_session()
+    try:
+        txs = db.query(Transaction).all()
+        if not txs:
+            console.print("[yellow]No transactions available for plotting.[/yellow]")
+            return
+
+        data = []
+        for t in txs:
+            data.append(
+                {
+                    "date": t.date,
+                    "amount": t.amount,
+                    "category": t.category,
+                }
+            )
+
+        df = pd.DataFrame(data)
+        df["date"] = pd.to_datetime(df["date"], format="%d-%m-%Y", dayfirst=True)
+        df.set_index("date", inplace=True)
+
+        categories = db.query(Category).all()
+        income_cats = [c.name for c in categories if c.type == "Income"]
+
+        df["type"] = df["category"].apply(lambda c: "Income" if c in income_cats else "Expense")
+
+        inc_monthly = df[df["type"] == "Income"]["amount"].resample("ME").sum()
+        exp_monthly = df[df["type"] == "Expense"]["amount"].resample("ME").sum()
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(inc_monthly.index, inc_monthly.values, label="Income", color="g", marker="o")
+        plt.plot(exp_monthly.index, exp_monthly.values, label="Expenses", color="r", marker="o")
+        plt.xlabel("Month")
+        plt.ylabel("Amount (₹)")
+        plt.title("Monthly Income vs Expenses")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        console.print("[bold green]Displaying Matplotlib Chart Window...[/bold green]")
+        plt.show()
+    finally:
+        db.close()
 
 
-def plot_transactions(df):
-    """Plot daily income and expense over the given date range."""
-    if df is None or df.empty:
-        print("No transaction data available to plot.")
-        return
+def export_reports_cli():
+    console.rule("[bold green]Export Financial Reports[/bold green]")
+    console.print("Available Export Options:")
+    console.print(" 1. PDF Financial Report (.pdf)")
+    console.print(" 2. Excel Spreadsheet (.xlsx)")
+    console.print(" 3. CSV File (.csv)")
 
-    df = df.copy()
-    df.set_index("date", inplace=True)
-
-    date_range = pd.date_range(start=df.index.min(), end=df.index.max(), freq="D")
-
-    income_df = (
-        df[df["category"] == "Income"]["amount"]
-        .resample("D")
-        .sum()
-        .reindex(date_range, fill_value=0)
-    )
-    expense_df = (
-        df[df["category"] == "Expense"]["amount"]
-        .resample("D")
-        .sum()
-        .reindex(date_range, fill_value=0)
-    )
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(income_df.index, income_df.values, label="Income", color="g")
-    plt.plot(expense_df.index, expense_df.values, label="Expense", color="r")
-    plt.xlabel("Date")
-    plt.ylabel("Amount (₹)")
-    plt.title("Income and Expenses Over Time")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_monthly_summary():
-    CSV.initialize_csv()
-    df = pd.read_csv(CSV.CSV_FILE)
-    if df.empty:
-        print("No transactions available to plot monthly summary.")
-        return
-
-    df["date"] = pd.to_datetime(df["date"], format=CSV.FORMAT, dayfirst=True)
-    df.set_index("date", inplace=True)
-
-    income_monthly = df[df["category"] == "Income"]["amount"].resample("ME").sum()
-    expense_monthly = df[df["category"] == "Expense"]["amount"].resample("ME").sum()
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(income_monthly.index, income_monthly.values, label="Income", color="g", marker="o")
-    plt.plot(expense_monthly.index, expense_monthly.values, label="Expenses", color="r", marker="o")
-    plt.xlabel("Month")
-    plt.ylabel("Amount (₹)")
-    plt.title("Monthly Income vs Expenses")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+    choice = Prompt.ask("Select export format", choices=["1", "2", "3"])
+    db = get_db_session()
+    try:
+        txs = db.query(Transaction).all()
+        if choice == "1":
+            from server import export_pdf
+            res = export_pdf(db=db)
+            out_file = f"Financial_Summary_{datetime.now().strftime('%Y%m%d')}.pdf"
+            with open(out_file, "wb") as f:
+                f.write(res.body)
+            console.print(f"[bold green]✓ PDF report saved to {out_file}![/bold green]")
+        elif choice == "2":
+            from server import export_excel
+            res = export_excel(db=db)
+            out_file = f"Financial_Report_{datetime.now().strftime('%Y%m%d')}.xlsx"
+            with open(out_file, "wb") as f:
+                f.write(res.body)
+            console.print(f"[bold green]✓ Excel spreadsheet saved to {out_file}![/bold green]")
+        elif choice == "3":
+            out_file = Prompt.ask("Enter export file path", default="export.csv")
+            data = [
+                {
+                    "date": t.date,
+                    "amount": t.amount,
+                    "category": t.category,
+                    "description": t.description,
+                    "currency": t.currency,
+                }
+                for t in txs
+            ]
+            df = pd.DataFrame(data)
+            df.to_csv(out_file, index=False)
+            console.print(f"[bold green]✓ CSV file exported to {out_file}![/bold green]")
+    finally:
+        db.close()
 
 
+# ---------------------------------------------------------------------------
+# Main Loop
+# ---------------------------------------------------------------------------
 def main():
-    CSV.initialize_csv()
+    init_db()
     while True:
-        print("\n=== Personal Finance Tracker ===")
-        print("1. Add a new transaction")
-        print("2. View transactions and summary within a date range")
-        print("3. Delete a transaction")
-        print("4. Update a transaction")
-        print("5. Plot monthly summary")
-        print("6. Export CSV file")
-        print("7. Exit")
-        choice = input("Enter your choice (1-7): ").strip()
+        console.clear()
+        display_header()
+        console.print("\n[bold]Select Option:[/bold]")
+        console.print(" [bold green]1.[/bold green] Add a New Transaction")
+        console.print(" [bold cyan]2.[/bold cyan] View Transactions & Summary")
+        console.print(" [bold yellow]3.[/bold yellow] Update a Transaction")
+        console.print(" [bold red]4.[/bold red] Delete a Transaction")
+        console.print(" [bold magenta]5.[/bold magenta] Manage Categories")
+        console.print(" [bold blue]6.[/bold blue] Manage Budget Goals")
+        console.print(" [bold cyan]7.[/bold cyan] Manage Recurring Transactions")
+        console.print(" [bold green]8.[/bold green] Plot Visual Charts")
+        console.print(" [bold yellow]9.[/bold yellow] Export Reports (PDF / Excel / CSV)")
+        console.print(" [bold dim]10.[/bold dim] Exit")
+
+        choice = Prompt.ask("\nEnter choice", choices=[str(i) for i in range(1, 11)])
 
         if choice == "1":
-            add()
+            add_transaction_cli()
         elif choice == "2":
-            start_date = get_date("Enter the start date (dd-mm-yyyy): ")
-            end_date = get_date("Enter the end date (dd-mm-yyyy): ")
-            df = CSV.get_transactions(start_date, end_date)
-            if not df.empty and input("Do you want to see a plot? (y/n) ").lower() == "y":
-                plot_transactions(df)
+            view_transactions_cli()
         elif choice == "3":
-            date = get_date("Enter the date of the transaction to delete (dd-mm-yyyy): ")
-            description = input("Enter the description of the transaction to delete: ")
-            CSV.delete_entry(date, description)
+            update_transaction_cli()
         elif choice == "4":
-            date = get_date("Enter the date of the transaction to update (dd-mm-yyyy): ")
-            description = input("Enter the description of the transaction to update: ")
-            new_amount_str = input(
-                "Enter the new amount (or leave blank to keep current): "
-            ).strip()
-            new_amount = None
-            if new_amount_str:
-                try:
-                    new_amount = float(new_amount_str)
-                    if new_amount <= 0:
-                        print("Amount must be positive. Skipping amount update.")
-                        new_amount = None
-                except ValueError:
-                    print("Invalid amount entered. Skipping amount update.")
-                    new_amount = None
-
-            new_category = input(
-                "Enter the new category ('I' for Income, 'E' for Expense, or leave blank to keep current): "
-            ).strip().upper()
-            if new_category in ["I", "INCOME"]:
-                new_category = "Income"
-            elif new_category in ["E", "EXPENSE"]:
-                new_category = "Expense"
-            else:
-                new_category = None
-
-            new_description = input(
-                "Enter the new description (or leave blank to keep current): "
-            ).strip() or None
-
-            CSV.update_entry(date, description, new_amount, new_category, new_description)
+            delete_transaction_cli()
         elif choice == "5":
-            plot_monthly_summary()
+            category_manager_cli()
         elif choice == "6":
-            export_path = input("Enter the export file path (e.g., export.csv): ").strip()
-            if not export_path:
-                export_path = "export.csv"
-            CSV.export_csv(export_path)
+            budget_manager_cli()
         elif choice == "7":
-            print("Goodbye!")
+            recurring_manager_cli()
+        elif choice == "8":
+            plot_charts_cli()
+        elif choice == "9":
+            export_reports_cli()
+        elif choice == "10":
+            console.print("\n[bold green]Goodbye! Thank you for using Personal Finance Tracker V2.[/bold green]")
             break
-        else:
-            print("Invalid choice. Please enter 1-7.")
+
+        Prompt.ask("\n[dim]Press Enter to return to main menu...[/dim]")
 
 
 if __name__ == "__main__":
