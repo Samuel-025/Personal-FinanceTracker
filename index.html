@@ -734,37 +734,90 @@ function confirmDelete(){
   if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
 }
 function renderDashboard(){
-  const now=new Date(),thisMonth=now.toISOString().slice(0,7);
-  const monthly=transactions.filter(t=>toIso(t.date).slice(0,7)===thisMonth);
-  const totInc=monthly.filter(t=>isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
-  const totExp=monthly.filter(t=>!isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
-  const net=totInc-totExp;
-  const allInc=transactions.filter(t=>isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
-  const allExp=transactions.filter(t=>!isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
-  document.getElementById("kpiGrid").innerHTML=`<div class="kpi-card kpi-income"><div class="kpi-label">This Month Income</div><div class="kpi-value">${fmt(totInc)}</div><div class="kpi-sub">All-time: ${fmt(allInc)}</div></div><div class="kpi-card kpi-expense"><div class="kpi-label">This Month Expenses</div><div class="kpi-value">${fmt(totExp)}</div><div class="kpi-sub">All-time: ${fmt(allExp)}</div></div><div class="kpi-card kpi-net ${net>=0?"positive":"negative"}"><div class="kpi-label">Net Savings</div><div class="kpi-value">${fmt(net)}</div><div class="kpi-sub">${net>=0?"Surplus this month":"Deficit this month"}</div></div><div class="kpi-card kpi-count"><div class="kpi-label">Transactions</div><div class="kpi-value">${transactions.length}</div><div class="kpi-sub">${monthly.length} this month</div></div>`;
-  renderDashboardRecent();renderLineChart();renderDoughnutChart();
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0,7);
+  const monthly = transactions.filter(t => toIso(t.date).slice(0,7) === thisMonth);
+
+  const allInc = transactions.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+  const allExp = transactions.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+  const allNet = allInc - allExp;
+
+  let displayInc = allInc;
+  let displayExp = allExp;
+  let displayNet = allNet;
+  let subText = "Total across all transactions";
+
+  if (monthly.length > 0) {
+    displayInc = monthly.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+    displayExp = monthly.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+    displayNet = displayInc - displayExp;
+    subText = `${monthly.length} transaction${monthly.length !== 1 ? 's' : ''} in ${now.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}`;
+  }
+
+  document.getElementById("kpiGrid").innerHTML = `
+    <div class="kpi-card kpi-income">
+      <div class="kpi-label">${monthly.length > 0 ? "This Month Income" : "Total Income"}</div>
+      <div class="kpi-value">${fmt(displayInc)}</div>
+      <div class="kpi-sub">${monthly.length > 0 ? `All-time: ${fmt(allInc)}` : "All-time earnings"}</div>
+    </div>
+    <div class="kpi-card kpi-expense">
+      <div class="kpi-label">${monthly.length > 0 ? "This Month Expenses" : "Total Expenses"}</div>
+      <div class="kpi-value">${fmt(displayExp)}</div>
+      <div class="kpi-sub">${monthly.length > 0 ? `All-time: ${fmt(allExp)}` : "All-time spending"}</div>
+    </div>
+    <div class="kpi-card kpi-net ${displayNet >= 0 ? "positive" : "negative"}">
+      <div class="kpi-label">${monthly.length > 0 ? "Net Savings" : "Net Balance"}</div>
+      <div class="kpi-value">${fmt(displayNet)}</div>
+      <div class="kpi-sub">${displayNet >= 0 ? "Surplus balance" : "Deficit balance"}</div>
+    </div>
+    <div class="kpi-card kpi-count">
+      <div class="kpi-label">Total Transactions</div>
+      <div class="kpi-value">${transactions.length}</div>
+      <div class="kpi-sub">${subText}</div>
+    </div>
+  `;
+
+  renderDashboardRecent();
+  renderLineChart();
+  renderDoughnutChart();
 }
+
 function renderDashboardRecent(){
-  const list=document.getElementById("recentList"),recent=transactions.slice(0,6);
-  if(!recent.length){list.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;margin:0 auto 12px;color:var(--color-text-faint)"><path d="M9 17H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h4m6-4h4a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4m-6 0V3"/></svg><h3>No transactions yet</h3><p>Add your first transaction to get started.</p></div>';return}
-  list.innerHTML=recent.map(tx=>{
-    const inc=isIncome(tx.category);
-    return `<div class="summary-row"><div class="summary-row-label"><div class="cat-icon" style="background:${inc?"var(--color-primary-highlight)":"var(--color-error-highlight)"}"><span style="font-size:14px">${CAT_EMOJIS[tx.category]||"💳"}</span></div><div><div style="font-size:var(--text-sm);font-weight:500">${tx.category}</div><div style="font-size:var(--text-xs);color:var(--color-text-muted)">${tx.description||fmtDate(tx.date)}</div></div></div><div class="summary-row-value" style="color:${inc?"var(--color-income)":"var(--color-expense)"}">${inc?"+":"-"}${fmt(tx.amount)}</div></div>`;
+  const list = document.getElementById("recentList");
+  const recent = transactions.slice().sort((a,b) => toIso(b.date).localeCompare(toIso(a.date))).slice(0,6);
+  if(!recent.length){
+    list.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;margin:0 auto 12px;color:var(--color-text-faint)"><path d="M9 17H5a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h4m6-4h4a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-4m-6 0V3"/></svg><h3>No transactions yet</h3><p>Add your first transaction to get started.</p></div>';
+    return;
+  }
+  list.innerHTML = recent.map(tx => {
+    const inc = isIncome(tx.category);
+    return `<div class="summary-row"><div class="summary-row-label"><div class="cat-icon" style="background:${inc ? "var(--color-primary-highlight)" : "var(--color-error-highlight)"}"><span style="font-size:14px">${CAT_EMOJIS[tx.category] || "💳"}</span></div><div><div style="font-size:var(--text-sm);font-weight:500">${tx.category}</div><div style="font-size:var(--text-xs);color:var(--color-text-muted)">${tx.description || fmtDate(tx.date)}</div></div></div><div class="summary-row-value" style="color:${inc ? "var(--color-income)" : "var(--color-expense)"}">${inc ? "+" : "-"}${fmt(tx.amount)}</div></div>`;
   }).join("");
 }
+
 function getChartColors(){
-  const d=theme==="dark";
-  return{gridColor:d?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)",textColor:d?"#8896aa":"#4a5568",income:d?"#4ade80":"#16a34a",incomeAlpha:d?"rgba(74,222,128,0.15)":"rgba(22,163,74,0.12)",expense:d?"#f87171":"#dc2626",expenseAlpha:d?"rgba(248,113,113,0.15)":"rgba(220,38,38,0.12)",blue:d?"#60a5fa":"#2563eb",purple:d?"#a78bfa":"#7c3aed",yellow:d?"#fbbf24":"#d97706",orange:d?"#fb923c":"#ea580c"};
+  const d = theme === "dark";
+  return { gridColor: d ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", textColor: d ? "#8896aa" : "#4a5568", income: d ? "#4ade80" : "#16a34a", incomeAlpha: d ? "rgba(74,222,128,0.15)" : "rgba(22,163,74,0.12)", expense: d ? "#f87171" : "#dc2626", expenseAlpha: d ? "rgba(248,113,113,0.15)" : "rgba(220,38,38,0.12)", blue: d ? "#60a5fa" : "#2563eb", purple: d ? "#a78bfa" : "#7c3aed", yellow: d ? "#fbbf24" : "#d97706", orange: d ? "#fb923c" : "#ea580c" };
 }
+
 function getMonthlyData(months){
-  const result=[];
-  for(let i=months-1;i>=0;i--){
-    const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);
-    const m=d.toISOString().slice(0,7),label=d.toLocaleDateString("en-IN",{month:"short",year:"2-digit"});
-    const mTx=transactions.filter(t=>toIso(t.date).slice(0,7)===m);
-    const inc=mTx.filter(t=>isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
-    const exp=mTx.filter(t=>!isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
-    result.push({m,label,inc,exp});
+  const result = [];
+  if (!transactions.length) return result;
+
+  const dates = transactions.map(t => toIso(t.date)).filter(Boolean).sort();
+  const latestIso = dates.length ? dates[dates.length - 1] : new Date().toISOString().split("T")[0];
+  const refDate = new Date(latestIso);
+
+  const numMonths = (months === 0 || months > 12) ? 12 : months;
+
+  for(let i = numMonths - 1; i >= 0; i--){
+    const d = new Date(refDate.getFullYear(), refDate.getMonth() - i, 1);
+    const m = d.toISOString().slice(0,7);
+    const label = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+    const mTx = transactions.filter(t => toIso(t.date).slice(0,7) === m);
+    const inc = mTx.filter(t => isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+    const exp = mTx.filter(t => !isIncome(t.category)).reduce((s,t) => s + t.amount, 0);
+    result.push({ m, label, inc, exp });
   }
   return result;
 }
