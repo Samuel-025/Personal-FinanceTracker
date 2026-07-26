@@ -228,7 +228,7 @@ tr:hover .td-actions{opacity:1}
           </div>
           <div class="card">
             <div class="card-header"><div class="card-title">Spending by Category</div></div>
-            <div class="chart-wrap"><canvas id="doughnutChart"></canvas></div>
+            <div class="chart-wrap" id="wrap-doughnut"><canvas id="doughnutChart"></canvas></div>
           </div>
           <div class="card">
             <div class="card-header"><div class="card-title">Recent Transactions</div></div>
@@ -328,8 +328,8 @@ tr:hover .td-actions{opacity:1}
             <div class="card-header"><div class="card-title">Monthly Overview (Last 12 Months)</div></div>
             <div class="chart-wrap" style="height:300px"><canvas id="barChart"></canvas></div>
           </div>
-          <div class="card"><div class="card-header"><div class="card-title">Income Breakdown</div></div><div class="chart-wrap"><canvas id="incomeDonut"></canvas></div></div>
-          <div class="card"><div class="card-header"><div class="card-title">Expense Breakdown</div></div><div class="chart-wrap"><canvas id="expenseDonut"></canvas></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Income Breakdown</div></div><div class="chart-wrap" id="wrap-income"><canvas id="incomeDonut"></canvas></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Expense Breakdown</div></div><div class="chart-wrap" id="wrap-expense"><canvas id="expenseDonut"></canvas></div></div>
           <div class="card" style="grid-column:1/-1"><div class="card-header"><div class="card-title">Category Summary</div></div><div id="categorySummary"></div></div>
         </div>
       </div>
@@ -417,9 +417,16 @@ tr:hover .td-actions{opacity:1}
 const INCOME_CATS=["Salary","Freelance","Investment","Business","Other Income"];
 const EXPENSE_CATS=["Food","Transport","Housing","Utilities","Healthcare","Entertainment","Shopping","Education","Travel","Other Expense"];
 const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Food:"🍽",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
-let transactions=[];
-let nextId=1,budgets={},sortField="date",sortDir=-1,pendingDeleteId=null,editingId=null,chartRange=6;
+let transactions=JSON.parse(localStorage.getItem("fintrack_txs")||"[]");
+let budgets=JSON.parse(localStorage.getItem("fintrack_budgets")||"{}");
+let nextId=transactions.reduce((m,t)=>Math.max(m,t.id||0),0)+1,sortField="date",sortDir=-1,pendingDeleteId=null,editingId=null,chartRange=6;
 let lineChart,doughnutChart,barChart,incomeDonut,expenseDonut,theme="dark";
+function saveData(){
+  try{
+    localStorage.setItem("fintrack_txs",JSON.stringify(transactions));
+    localStorage.setItem("fintrack_budgets",JSON.stringify(budgets));
+  }catch(e){console.error("localStorage save failed",e)}
+}
 const fmt=n=>"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtDate=s=>{if(!s)return "";const d=new Date(s+"T00:00:00");return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})};
 const isIncome=cat=>INCOME_CATS.includes(cat);
@@ -495,6 +502,7 @@ function handleAddSubmit(e){
   const tx={id:nextId++,date,amount,category,description:desc};
   transactions.push(tx);
   transactions.sort((a,b)=>b.date.localeCompare(a.date));
+  saveData();
   document.getElementById("addSuccessMsg").textContent=`Added: ${getType(category)} of ${fmt(amount)} for "${category}" on ${fmtDate(date)}`;
   resetAddForm();
   document.getElementById("addSuccessCard").style.display="block";
@@ -562,6 +570,7 @@ function saveEdit(){
   const tx=transactions.find(t=>t.id===editingId);
   Object.assign(tx,{date,amount,category,description:desc});
   transactions.sort((a,b)=>b.date.localeCompare(a.date));
+  saveData();
   closeEditModal();toast("Transaction updated!");renderTransactions();
   if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
 }
@@ -569,6 +578,7 @@ function openDelete(id){pendingDeleteId=id;document.getElementById("deleteModal"
 function closeDeleteModal(){document.getElementById("deleteModal").classList.remove("open")}
 function confirmDelete(){
   transactions=transactions.filter(t=>t.id!==pendingDeleteId);
+  saveData();
   closeDeleteModal();toast("Transaction deleted.","info");renderTransactions();
   if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
 }
@@ -625,9 +635,11 @@ function renderDoughnutChart(){
   const C=getChartColors(),cats={};
   transactions.filter(t=>!isIncome(t.category)).forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.expense,C.blue,C.purple,C.yellow,C.orange,C.income,"#f472b6","#34d399","#a78bfa","#fb923c"];
+  const wrap=document.getElementById("wrap-doughnut");
+  if(doughnutChart){doughnutChart.destroy();doughnutChart=null;}
+  if(!labels.length){wrap.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
+  wrap.innerHTML='<canvas id="doughnutChart"></canvas>';
   const ctx=document.getElementById("doughnutChart");
-  if(doughnutChart)doughnutChart.destroy();
-  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
   doughnutChart=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ₹${ctx.raw.toLocaleString("en-IN",{minimumFractionDigits:2})} (${((ctx.raw/values.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)`}}}}});
 }
 function renderAnalytics(){renderBarChart();renderIncomePie();renderExpensePie();renderCategorySummary()}
@@ -640,18 +652,22 @@ function renderIncomePie(){
   const C=getChartColors(),cats={};
   transactions.filter(t=>isIncome(t.category)).forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.income,C.blue,C.purple,C.yellow,C.orange];
+  const wrap=document.getElementById("wrap-income");
+  if(incomeDonut){incomeDonut.destroy();incomeDonut=null;}
+  if(!labels.length){wrap.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No income data yet.</p></div>';return}
+  wrap.innerHTML='<canvas id="incomeDonut"></canvas>';
   const ctx=document.getElementById("incomeDonut");
-  if(incomeDonut)incomeDonut.destroy();
-  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No income data yet.</p></div>';return}
   incomeDonut=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"bottom",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}}}}});
 }
 function renderExpensePie(){
   const C=getChartColors(),cats={};
   transactions.filter(t=>!isIncome(t.category)).forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.expense,C.blue,C.purple,C.yellow,C.orange,"#f472b6"];
+  const wrap=document.getElementById("wrap-expense");
+  if(expenseDonut){expenseDonut.destroy();expenseDonut=null;}
+  if(!labels.length){wrap.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
+  wrap.innerHTML='<canvas id="expenseDonut"></canvas>';
   const ctx=document.getElementById("expenseDonut");
-  if(expenseDonut)expenseDonut.destroy();
-  if(!labels.length){ctx.parentElement.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
   expenseDonut=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"bottom",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}}}}});
 }
 function renderCategorySummary(){
@@ -668,7 +684,7 @@ function openBudgetModal(){document.getElementById("budgetModal").classList.add(
 function saveBudget(){
   const cat=document.getElementById("budg-category").value,limit=parseFloat(document.getElementById("budg-limit").value);
   if(!cat||!limit||limit<=0){toast("Enter a valid budget limit","error");return}
-  budgets[cat]=limit;document.getElementById("budgetModal").classList.remove("open");
+  budgets[cat]=limit;saveData();document.getElementById("budgetModal").classList.remove("open");
   toast(`Budget set for ${cat}!`);renderBudgets();
 }
 function renderBudgets(){
@@ -691,7 +707,7 @@ function renderBudgets(){
   const monthName=now.toLocaleDateString("en-IN",{month:"long",year:"numeric"});
   glance.innerHTML=`<div class="summary-row"><div class="summary-row-label">📅 ${monthName} Income</div><div class="summary-row-value" style="color:var(--color-income)">${fmt(inc)}</div></div><div class="summary-row"><div class="summary-row-label">💸 ${monthName} Expenses</div><div class="summary-row-value" style="color:var(--color-expense)">${fmt(exp)}</div></div><div class="summary-row"><div class="summary-row-label">💰 Net Savings</div><div class="summary-row-value" style="color:${inc-exp>=0?"var(--color-income)":"var(--color-expense)"}">${fmt(inc-exp)}</div></div>`;
 }
-function deleteBudget(cat){delete budgets[cat];toast(`Budget for ${cat} removed.`,"info");renderBudgets()}
+function deleteBudget(cat){delete budgets[cat];saveData();toast(`Budget for ${cat} removed.`,"info");renderBudgets()}
 function rebuildCharts(){
   if(document.getElementById("view-dashboard").classList.contains("active")){renderLineChart();renderDoughnutChart()}
   if(document.getElementById("view-analytics").classList.contains("active")){renderAnalytics()}

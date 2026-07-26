@@ -1,0 +1,5 @@
+﻿[tool.pyrefly]
+search_paths = [
+  ".venv/Lib/site-packages",
+  "C:/Users/adity/AppData/Local/Packages/PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0/LocalCache/local-packages/Python312/site-packages"
+]

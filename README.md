@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
 A personal finance tracker with two modes:
-- 🌐 **Web Dashboard** — runs fully in the browser, no install needed
+- 🌐 **Web Dashboard** — runs fully in the browser with persistent `localStorage` support
 - 🖥️ **Python CLI** — terminal app that saves data to a local CSV
 
 ---
@@ -26,6 +26,7 @@ No login. No install. Just open and start tracking.
 - **Transactions** — sortable table, filters by date range / type / category, global search, inline edit & delete, CSV export
 - **Analytics** — 12-month bar chart, income & expense breakdowns by category with progress bars
 - **Budgets** — set monthly limits per expense category, live progress bars, over-budget alerts
+- **Persistent Storage** — saves automatically to browser `localStorage` so data survives page refreshes
 - 🌙 Dark / ☀️ Light mode toggle
 - 📱 Mobile responsive with collapsible sidebar
 - 🇮🇳 Currency formatted in Indian Rupees (₹)
@@ -35,6 +36,7 @@ No login. No install. Just open and start tracking.
 - Filter transactions by date range
 - Plot daily income vs expenses and monthly summaries (Matplotlib)
 - Export data to CSV
+- Automatic UTF-8 terminal encoding and robust input validation
 
 ---
 
@@ -48,7 +50,7 @@ https://samuel-025.github.io/Personal-FinanceTracker/
 ```
 No installation, no account, works on any device.
 
-> ⚠️ **Note:** Data is stored in memory only — it resets when you close or refresh the tab. For persistent storage, use the CLI.
+> 💾 **Note:** Data is saved automatically to your browser's `localStorage`. You can also export your data anytime to a `.csv` file via the **Transactions** tab.
 
 ---
 
@@ -97,14 +99,14 @@ cd Personal-FinanceTracker
 
 ```bash
 # Create venv
-python -m venv venv
+python -m venv .venv
 
 # Activate it
-# Windows:
-venv\Scripts\activate
+# Windows (PowerShell):
+.\.venv\Scripts\activate
 
 # macOS / Linux:
-source venv/bin/activate
+source .venv/bin/activate
 ```
 
 ### Step 3 — Install dependencies
@@ -126,8 +128,8 @@ python main.py
 2. View transactions
 3. Update a transaction
 4. Delete a transaction
-5. Plot charts
-6. Export to CSV
+5. Plot monthly summary
+6. Export CSV file
 7. Exit
 ```
 
@@ -143,6 +145,8 @@ Personal-FinanceTracker/
 ├── data_entry.py       # Input helpers and validators for CLI
 ├── requirements.txt    # Python dependencies (pandas, matplotlib)
 ├── index.html          # Full web dashboard (GitHub Pages entry point)
+├── pyproject.toml      # Linter & Pyrefly project settings
+├── pyrefly.toml        # Type checker search paths
 ├── LICENSE             # MIT License
 └── README.md
 ```
@@ -158,7 +162,6 @@ Personal-FinanceTracker/
 | `ModuleNotFoundError: No module named 'pandas'` | Run `pip install -r requirements.txt` |
 | `python` not recognized on Windows | Use `python3` or install Python from [python.org](https://www.python.org/) |
 | Charts not showing (CLI) | Ensure `matplotlib` is installed: `pip install matplotlib` |
-| Web dashboard data lost on refresh | Expected — browser storage is in-memory. Use CLI for persistence. |
 | `index.html` opens as text | Right-click → Open With → your browser |
 
 ---
@@ -168,12 +171,18 @@ Personal-FinanceTracker/
 | File | Bug | Fix |
 |---|---|---|
 | `data_entry.py` | Typos in error messages (`frmat`, `entr`, `Account`) | Corrected all three |
-| `main.py` | `sort_csv_by_date()` saved datetime objects instead of strings, corrupting CSV on re-read | Added `.dt.strftime()` before saving |
+| `data_entry.py` | Unfriendly raw exception text in `get_amount()` | Cleaned up validation error messages |
+| `main.py` | `sort_csv_by_date()` saved datetime objects instead of strings | Added string conversion before saving |
 | `main.py` | `update_entry()` used `if new_amount:` — falsy for `0` | Changed to `if new_amount is not None:` |
-| `main.py` | `plot_transactions()` used wrong index for `reindex()`, misaligning chart data | Fixed to use `pd.date_range()` for clean daily index |
-| `main.py` | Monthly plot showed net only instead of separate income/expense lines | Split into two `resample("ME")` series |
-| `Requirement.txt.txt` | Double `.txt` extension, typo `matpolt` | Replaced with correct `requirements.txt` |
-| `index.html` | Seeded with 16 demo transactions on load | Replaced with empty `transactions = []` — starts clean |
+| `main.py` | `plot_transactions()` used wrong index for `reindex()` | Fixed to use `pd.date_range()` for clean daily index |
+| `main.py` | Monthly plot showed net only instead of separate lines | Split into two `resample("ME")` series |
+| `main.py` | `FileNotFoundError` / `EmptyDataError` when CSV missing | Added automatic `CSV.initialize_csv()` on startup |
+| `main.py` | Entries without description failed delete/update | Used `df['description'].fillna('')` for NaN matching |
+| `main.py` | Windows Rupee symbol (`₹`) terminal encoding crash | Configured UTF-8 stdout encoding on startup |
+| `main.py` | Pyrefly static type checking warnings | Applied typed `.apply()` date formatters and clean DataFrame exports |
+| `index.html` | Seeded with demo transactions on load | Starts clean with empty transactions array |
+| `index.html` | Chart canvas destroyed when no data | Added container wrappers (`wrap-doughnut`, `wrap-income`, `wrap-expense`) |
+| `index.html` | Web Dashboard data lost on page refresh | Added `localStorage` automatic state persistence |
 | `finance_data.csv` | Personal data committed to repo | Deleted from repo, now gitignored |
 
 ---
