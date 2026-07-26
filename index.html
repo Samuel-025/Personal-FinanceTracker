@@ -199,7 +199,7 @@ tr:hover .td-actions{opacity:1}
         <div class="page-title" id="pageTitle">Dashboard</div>
       </div>
       <div class="topbar-actions">
-        <span id="apiStatusBadge" class="badge" style="background:rgba(255,255,255,0.06);color:var(--color-text-muted);font-size:11px;display:flex;align-items:center;gap:4px">Checking API…</span>
+        <span id="apiStatusBadge" class="badge" style="background:rgba(255,255,255,0.06);color:var(--color-text-muted);font-size:11px;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)</span>
         <select id="currencySelect" class="form-select" style="padding:4px 10px;font-size:12px;width:auto;border-radius:var(--radius-full)" onchange="changeCurrency(this.value)">
           <option value="INR">🇮🇳 INR (₹)</option>
           <option value="USD">🇺🇸 USD ($)</option>
@@ -494,7 +494,7 @@ async function checkApiStatus(){
   let controller=null, timeoutId=null;
   if(typeof AbortController!=="undefined"){
     controller=new AbortController();
-    timeoutId=setTimeout(()=>controller.abort(),2500);
+    timeoutId=setTimeout(()=>controller.abort(),800);
   }
 
   try{
