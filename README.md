@@ -15,15 +15,6 @@ A unified personal finance management suite featuring:
 
 ---
 
-### 🏷️ GitHub Repository Topics Set
-Copy & paste these topics into the GitHub Repository **About ⚙️** settings:
-
-```text
-personal-finance, finance-tracker, fastapi, sqlite, rich-cli, pdf-export, excel-export, budget-manager, multi-currency, chartjs, dashboard, python3
-```
-
----
-
 ## 🚀 Quick Start
 
 ### Step 1 — Clone & Set Up Environment
