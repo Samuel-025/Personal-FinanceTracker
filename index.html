@@ -457,15 +457,35 @@ function changeCurrency(curr){
   renderTransactions();
 }
 
-const fmt=n=>{
-  const converted=n*(RATES[currentCurrency]||1);
-  const sym=CURRENCY_SYMBOLS[currentCurrency]||"₹";
-  return sym+Math.abs(converted).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDate = s => {
+  if (!s) return "";
+  let d;
+  if (typeof s === "string" && s.includes("-")) {
+    const parts = s.split("T")[0].split("-");
+    if (parts[0].length === 4) {
+      // yyyy-mm-dd
+      d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    } else if (parts[2].length === 4) {
+      // dd-mm-yyyy
+      d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    } else {
+      d = new Date(s);
+    }
+  } else {
+    d = new Date(s);
+  }
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
-const fmtDate=s=>{if(!s)return "";const d=new Date(s+"T00:00:00");return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})};
-const isIncome=cat=>INCOME_CATS.includes(cat);
-const getType=cat=>isIncome(cat)?"Income":"Expense";
+const isIncome = cat => {
+  if (!cat) return false;
+  const c = String(cat).trim().toLowerCase();
+  if (c === "income" || c === "salary" || c === "freelance" || c === "investment" || c === "business" || c === "other income") return true;
+  return INCOME_CATS.some(ic => ic.toLowerCase() === c);
+};
+
+const getType = cat => isIncome(cat) ? "Income" : "Expense";
 
 async function checkApiStatus(){
   const badge=document.getElementById("apiStatusBadge");

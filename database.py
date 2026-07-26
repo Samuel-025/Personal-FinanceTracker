@@ -58,10 +58,20 @@ def init_db():
                         desc = str(row.get("description", ""))
                         if desc == "nan" or pd.isna(desc):
                             desc = ""
+                        
+                        raw_cat = str(row["category"])
+                        cat_name = raw_cat
+                        if raw_cat in ["Income", "Expense"] and desc:
+                            cat_name = desc
+                        elif raw_cat == "Income":
+                            cat_name = "Other Income"
+                        elif raw_cat == "Expense":
+                            cat_name = "Other Expense"
+
                         tx = Transaction(
                             date=str(row["date"]),
                             amount=float(row["amount"]),
-                            category=str(row["category"]),
+                            category=cat_name,
                             description=desc,
                             currency="INR",
                         )
@@ -70,6 +80,23 @@ def init_db():
                     print("Successfully auto-migrated finance_data.csv into SQLite database!")
             except Exception as e:
                 print(f"CSV migration notice: {e}")
+
+        # Auto-normalize any existing transactions with generic category names
+        txs = db.query(Transaction).all()
+        normalized = False
+        for t in txs:
+            if t.category in ["Income", "Expense"]:
+                if t.description:
+                    t.category = t.description
+                    normalized = True
+                elif t.category == "Income":
+                    t.category = "Other Income"
+                    normalized = True
+                elif t.category == "Expense":
+                    t.category = "Other Expense"
+                    normalized = True
+        if normalized:
+            db.commit()
     finally:
         db.close()
 
