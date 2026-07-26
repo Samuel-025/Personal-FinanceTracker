@@ -6,6 +6,8 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
+> **Repository Description**: 💰 Unified Personal Finance Tracker featuring a FastAPI + SQLite backend REST API, Rich Terminal CLI, multi-currency Web Dashboard, and PDF/Excel report exports.
+
 A unified personal finance management suite featuring:
 - ⚡ **FastAPI + SQLite Backend (`server.py`)** — REST API with automatic Swagger docs (`/docs`), auto-migrating legacy `finance_data.csv` on startup.
 - 🎨 **Rich Terminal CLI (`main.py`)** — Beautiful colored console UI with KPI panels, category manager, budget goals, recurring rules, and visual charts.
@@ -13,8 +15,12 @@ A unified personal finance management suite featuring:
 
 ---
 
-### 🏷️ Repository Topics & Tags
-`personal-finance` · `finance-tracker` · `fastapi` · `sqlite` · `rich-cli` · `pdf-export` · `excel-export` · `budget-manager` · `multi-currency` · `chartjs` · `dashboard`
+### 🏷️ GitHub Repository Topics Set
+Copy & paste these topics into the GitHub Repository **About ⚙️** settings:
+
+```text
+personal-finance, finance-tracker, fastapi, sqlite, rich-cli, pdf-export, excel-export, budget-manager, multi-currency, chartjs, dashboard, python3
+```
 
 ---
 
