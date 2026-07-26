@@ -501,6 +501,50 @@ def export_reports_cli():
         db.close()
 
 
+def backup_database_cli():
+    console.rule("[bold green]Backup Database[/bold green]")
+    db_file = os.getenv("DATABASE_URL", "sqlite:///./finance.db").replace("sqlite:///", "")
+    if not os.path.exists(db_file):
+        console.print("[red]Database file not found.[/red]")
+        return
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_file = f"finance_backup_{timestamp}.db"
+    import shutil
+    shutil.copy2(db_file, out_file)
+    console.print(f"[bold green]✓ Database backed up successfully to {out_file}![/bold green]")
+
+
+def restore_database_cli():
+    console.rule("[bold yellow]Restore Database[/bold yellow]")
+    restore_file = Prompt.ask("Enter path to backup .db file")
+    if not os.path.exists(restore_file):
+        console.print("[red]File not found.[/red]")
+        return
+    import sqlite3, shutil
+    try:
+        conn = sqlite3.connect(restore_file)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = {row[0] for row in cursor.fetchall()}
+        conn.close()
+
+        required_tables = {"transactions", "categories", "budgets", "recurring_rules"}
+        if not required_tables.issubset(tables):
+            console.print(f"[red]Invalid database file. Missing required tables: {required_tables - tables}[/red]")
+            return
+
+        target_db = os.getenv("DATABASE_URL", "sqlite:///./finance.db").replace("sqlite:///", "")
+        if os.path.exists(target_db):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            bak_path = f"{target_db}.bak-{timestamp}"
+            shutil.copy2(target_db, bak_path)
+
+        shutil.copy2(restore_file, target_db)
+        console.print("[bold green]✓ Database restored successfully![/bold green]")
+    except Exception as e:
+        console.print(f"[red]Failed to restore database: {e}[/red]")
+
+
 # ---------------------------------------------------------------------------
 # Main Loop
 # ---------------------------------------------------------------------------
@@ -519,9 +563,11 @@ def main():
         console.print(" [bold cyan]7.[/bold cyan] Manage Recurring Transactions")
         console.print(" [bold green]8.[/bold green] Plot Visual Charts")
         console.print(" [bold yellow]9.[/bold yellow] Export Reports (PDF / Excel / CSV)")
-        console.print(" [bold dim]10.[/bold dim] Exit")
+        console.print(" [bold green]10.[/bold green] Backup Database (.db)")
+        console.print(" [bold yellow]11.[/bold yellow] Restore Database (.db)")
+        console.print(" [bold dim]12.[/bold dim] Exit")
 
-        choice = Prompt.ask("\nEnter choice", choices=[str(i) for i in range(1, 11)])
+        choice = Prompt.ask("\nEnter choice", choices=[str(i) for i in range(1, 13)])
 
         if choice == "1":
             add_transaction_cli()
@@ -542,6 +588,10 @@ def main():
         elif choice == "9":
             export_reports_cli()
         elif choice == "10":
+            backup_database_cli()
+        elif choice == "11":
+            restore_database_cli()
+        elif choice == "12":
             console.print("\n[bold green]Goodbye! Thank you for using Personal Finance Tracker V2.[/bold green]")
             break
 

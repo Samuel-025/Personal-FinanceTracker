@@ -4,9 +4,12 @@ import sys
 from typing import Optional
 from datetime import datetime
 import pandas as pd
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, Transaction, Category, Budget, RecurringRule
+
+load_dotenv()
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -14,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-DATABASE_URL = "sqlite:///./finance.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./finance.db")
 
 engine = create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}

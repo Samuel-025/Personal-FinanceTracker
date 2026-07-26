@@ -6,6 +6,9 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
+> [!NOTE]
+> **Live Demo Notice**: The GitHub Pages live demo is a static, client-side preview using browser `localStorage` only. The FastAPI + SQLite backend, interactive Swagger docs, and server-side PDF/Excel export generators require running `server.py` locally.
+
 > **Repository Description**: 💰 Unified Personal Finance Tracker featuring a FastAPI + SQLite backend REST API, Rich Terminal CLI, multi-currency Web Dashboard, and PDF/Excel report exports.
 
 A unified personal finance management suite featuring:
@@ -41,8 +44,8 @@ pip install -r requirements.txt
 ```bash
 python -m uvicorn server:app --reload --port 8000
 ```
-- 🌐 **Web Dashboard**: `http://localhost:8000/`
-- 📚 **Interactive Swagger API Docs**: `http://localhost:8000/docs`
+- 🌐 **Web Dashboard**: `http://localhost:8000/` (or `http://127.0.0.1:8000/`)
+- 📚 **Interactive Swagger API Docs**: `http://localhost:8000/docs` *(Swagger docs match whatever host/port `uvicorn` is launched on)*
 
 ---
 

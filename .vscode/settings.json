@@ -1,12 +1,10 @@
 {
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/.venv/Lib/site-packages",
-    "C:/Users/adity/AppData/Local/Packages/PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0/LocalCache/local-packages/Python312/site-packages"
+    "${workspaceFolder}/.venv/Lib/site-packages"
   ],
   "pyrefly.interpreter": "${workspaceFolder}/.venv/Scripts/python.exe",
   "pyrefly.searchPaths": [
-    "${workspaceFolder}/.venv/Lib/site-packages",
-    "C:/Users/adity/AppData/Local/Packages/PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0/LocalCache/local-packages/Python312/site-packages"
+    "${workspaceFolder}/.venv/Lib/site-packages"
   ]
 }

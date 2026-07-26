@@ -1,11 +1,15 @@
-pandas>=2.0.0
-matplotlib>=3.7.0
-fastapi>=0.100.0
-uvicorn>=0.22.0
-sqlalchemy>=2.0.0
-rich>=13.0.0
-openpyxl>=3.1.0
-reportlab>=4.0.0
-python-multipart>=0.0.6
-httpx>=0.25.0
-
+# Personal Finance Tracker V2 — Pinned Dependencies (Last Verified Working Versions)
+pandas==3.0.5
+matplotlib==3.11.1
+fastapi==0.140.0
+uvicorn==0.51.0
+sqlalchemy==2.0.51
+rich==15.0.0
+openpyxl==3.1.5
+reportlab==5.0.0
+python-multipart==0.0.32
+httpx==0.28.1
+slowapi==0.1.10
+python-dotenv==1.2.2
+pytest==9.1.1
+pytest-asyncio==1.4.0

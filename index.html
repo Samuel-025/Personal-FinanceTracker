@@ -201,11 +201,15 @@ tr:hover .td-actions{opacity:1}
       <div class="topbar-actions">
         <span id="apiStatusBadge" class="badge" style="background:rgba(255,255,255,0.06);color:var(--color-text-muted);font-size:11px;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)</span>
         <button class="btn btn-secondary btn-sm" onclick="resetLocalData()" title="Reset & Restore Sample Data" style="padding:4px 10px;font-size:12px">↻ Reset Data</button>
-        <select id="currencySelect" class="form-select" style="padding:4px 10px;font-size:12px;width:auto;border-radius:var(--radius-full)" onchange="changeCurrency(this.value)">
-          <option value="INR">🇮🇳 INR (₹)</option>
-          <option value="USD">🇺🇸 USD ($)</option>
-          <option value="EUR">🇪🇺 EUR (€)</option>
-        </select>
+        <input type="password" id="apiKeyInput" class="form-input" style="padding:4px 8px;font-size:11px;width:100px" placeholder="API Key…" title="Optional API Key for server authentication" onchange="saveApiKey(this.value)">
+        <div style="display:flex;align-items:center;gap:4px">
+          <select id="currencySelect" class="form-select" style="padding:4px 10px;font-size:12px;width:auto;border-radius:var(--radius-full)" onchange="changeCurrency(this.value)">
+            <option value="INR">🇮🇳 INR (₹)</option>
+            <option value="USD">🇺🇸 USD ($)</option>
+            <option value="EUR">🇪🇺 EUR (€)</option>
+          </select>
+          <span style="font-size:10px;color:var(--color-text-muted);cursor:help" title="Approximate rates, updated manually">ℹ️ Approx. rates</span>
+        </div>
         <div class="search-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input type="text" class="search-input" placeholder="Search transactions…" id="globalSearch" oninput="handleSearch(this.value)">
@@ -534,9 +538,30 @@ const isIncome = cat => {
 
 const getType = cat => isIncome(cat) ? "Income" : "Expense";
 
+function getApiHeaders(){
+  const headers = {};
+  const key = localStorage.getItem("fintrack_api_key");
+  if(key) headers["X-API-Key"] = key;
+  return headers;
+}
+
+function saveApiKey(val){
+  if(val && val.trim()){
+    localStorage.setItem("fintrack_api_key", val.trim());
+  } else {
+    localStorage.removeItem("fintrack_api_key");
+  }
+  checkApiStatus();
+}
+
 async function checkApiStatus(){
   const badge=document.getElementById("apiStatusBadge");
   if(!badge)return;
+
+  const inputKey = document.getElementById("apiKeyInput");
+  if(inputKey && !inputKey.value && localStorage.getItem("fintrack_api_key")){
+    inputKey.value = localStorage.getItem("fintrack_api_key");
+  }
 
   const tryEndpoints = [
     API_BASE,
@@ -554,7 +579,7 @@ async function checkApiStatus(){
 
     try{
       const options=controller?{signal:controller.signal}:{};
-      const res=await fetch(`${ep}/transactions`, { ...options, mode: "cors" });
+      const res=await fetch(`${ep}/transactions`, { ...options, headers: getApiHeaders(), mode: "cors" });
       if(timeoutId)clearTimeout(timeoutId);
       if(res.ok){
         isApiOnline=true;

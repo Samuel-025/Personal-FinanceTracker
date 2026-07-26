@@ -2,15 +2,25 @@ import os
 import io
 import csv
 import calendar
+import logging
+import sqlite3
+import shutil
 from typing import List, Optional, Any
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from dotenv import load_dotenv
+
+load_dotenv()
+from fastapi import FastAPI, Depends, HTTPException, Query, Header, Request, status, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from database import init_db, get_db, SessionLocal
 from models import Transaction, Category, Budget, RecurringRule
@@ -23,10 +33,26 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
+logging.basicConfig(level=logging.INFO)
+limiter = Limiter(key_func=get_remote_address)
+
+
+def require_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    api_key_env = os.getenv("API_KEY", "").strip()
+    if api_key_env:
+        if not x_api_key or x_api_key != api_key_env:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing X-API-Key header"
+            )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    api_key_env = os.getenv("API_KEY", "").strip()
+    if not api_key_env:
+        logging.warning("API running without authentication")
     yield
 
 
@@ -37,9 +63,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+cors_env = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
+origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -150,7 +182,7 @@ def get_transactions(
     return transactions
 
 
-@app.post("/api/transactions", response_model=TransactionSchema)
+@app.post("/api/transactions", response_model=TransactionSchema, dependencies=[Depends(require_api_key)])
 def create_transaction(item: TransactionSchema, db: Session = Depends(get_db)):
     tx = Transaction(
         date=item.date,
@@ -165,7 +197,7 @@ def create_transaction(item: TransactionSchema, db: Session = Depends(get_db)):
     return tx
 
 
-@app.put("/api/transactions/{tx_id}", response_model=TransactionSchema)
+@app.put("/api/transactions/{tx_id}", response_model=TransactionSchema, dependencies=[Depends(require_api_key)])
 def update_transaction(
     tx_id: int, item: TransactionSchema, db: Session = Depends(get_db)
 ):
@@ -183,7 +215,7 @@ def update_transaction(
     return tx
 
 
-@app.delete("/api/transactions/{tx_id}")
+@app.delete("/api/transactions/{tx_id}", dependencies=[Depends(require_api_key)])
 def delete_transaction(tx_id: int, db: Session = Depends(get_db)):
     tx = db.query(Transaction).filter(Transaction.id == tx_id).first()
     if not tx:
@@ -201,7 +233,7 @@ def get_categories(db: Session = Depends(get_db)):
     return db.query(Category).all()
 
 
-@app.post("/api/categories", response_model=CategorySchema)
+@app.post("/api/categories", response_model=CategorySchema, dependencies=[Depends(require_api_key)])
 def create_category(item: CategorySchema, db: Session = Depends(get_db)):
     existing = db.query(Category).filter(Category.name == item.name).first()
     if existing:
@@ -218,7 +250,7 @@ def create_category(item: CategorySchema, db: Session = Depends(get_db)):
     return cat
 
 
-@app.delete("/api/categories/{cat_id}")
+@app.delete("/api/categories/{cat_id}", dependencies=[Depends(require_api_key)])
 def delete_category(cat_id: int, db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.id == cat_id).first()
     if not cat:
@@ -256,7 +288,7 @@ def get_budgets(db: Session = Depends(get_db)):
     return db.query(Budget).all()
 
 
-@app.post("/api/budgets", response_model=BudgetSchema)
+@app.post("/api/budgets", response_model=BudgetSchema, dependencies=[Depends(require_api_key)])
 def set_budget(item: BudgetSchema, db: Session = Depends(get_db)):
     existing = (
         db.query(Budget)
@@ -275,7 +307,7 @@ def set_budget(item: BudgetSchema, db: Session = Depends(get_db)):
     return b
 
 
-@app.delete("/api/budgets/{category_name}")
+@app.delete("/api/budgets/{category_name}", dependencies=[Depends(require_api_key)])
 def delete_budget(category_name: str, db: Session = Depends(get_db)):
     b = db.query(Budget).filter(Budget.category_name == category_name).first()
     if not b:
@@ -293,7 +325,7 @@ def get_recurring(db: Session = Depends(get_db)):
     return db.query(RecurringRule).all()
 
 
-@app.post("/api/recurring", response_model=RecurringSchema)
+@app.post("/api/recurring", response_model=RecurringSchema, dependencies=[Depends(require_api_key)])
 def create_recurring(item: RecurringSchema, db: Session = Depends(get_db)):
     rule = RecurringRule(
         description=item.description,
@@ -309,7 +341,7 @@ def create_recurring(item: RecurringSchema, db: Session = Depends(get_db)):
     return rule
 
 
-@app.delete("/api/recurring/{rule_id}")
+@app.delete("/api/recurring/{rule_id}", dependencies=[Depends(require_api_key)])
 def delete_recurring(rule_id: int, db: Session = Depends(get_db)):
     rule = db.query(RecurringRule).filter(RecurringRule.id == rule_id).first()
     if not rule:
@@ -319,7 +351,7 @@ def delete_recurring(rule_id: int, db: Session = Depends(get_db)):
     return {"message": "Recurring rule deleted"}
 
 
-@app.post("/api/recurring/process")
+@app.post("/api/recurring/process", dependencies=[Depends(require_api_key)])
 def process_recurring(db: Session = Depends(get_db)):
     today_str = datetime.today().strftime("%d-%m-%Y")
     today_dt = datetime.strptime(today_str, "%d-%m-%Y")
@@ -365,7 +397,8 @@ def process_recurring(db: Session = Depends(get_db)):
 # Export Endpoints (PDF, Excel, CSV)
 # ---------------------------------------------------------------------------
 @app.get("/api/export/excel")
-def export_excel(db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def export_excel(request: Request, db: Session = Depends(get_db)):
     transactions = db.query(Transaction).all()
 
     wb = Workbook()
@@ -421,7 +454,8 @@ def export_excel(db: Session = Depends(get_db)):
 
 
 @app.get("/api/export/pdf")
-def export_pdf(db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def export_pdf(request: Request, db: Session = Depends(get_db)):
     transactions = db.query(Transaction).all()
 
     buffer = io.BytesIO()
@@ -527,3 +561,64 @@ def export_csv_api(db: Session = Depends(get_db)):
     return StreamingResponse(
         mem, headers=headers, media_type="text/csv"
     )
+
+
+# ---------------------------------------------------------------------------
+# Backup & Restore Endpoints
+# ---------------------------------------------------------------------------
+@app.get("/api/backup")
+def backup_database():
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./finance.db")
+    db_file = db_url.replace("sqlite:///", "")
+    if not os.path.exists(db_file):
+        raise HTTPException(status_code=404, detail="Database file not found")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return FileResponse(
+        db_file,
+        filename=f"finance_backup_{timestamp}.db",
+        media_type="application/x-sqlite3",
+    )
+
+
+@app.post("/api/restore", dependencies=[Depends(require_api_key)])
+async def restore_database(file: UploadFile = File(...)):
+    if not file.filename or not file.filename.endswith((".db", ".sqlite", ".sqlite3")):
+        raise HTTPException(status_code=400, detail="Invalid file type. Must be a .db or .sqlite file.")
+
+    temp_path = "temp_restore.db"
+    try:
+        content = await file.read()
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        # Validate SQLite format and required schema tables
+        conn = sqlite3.connect(temp_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = {row[0] for row in cursor.fetchall()}
+        conn.close()
+
+        required_tables = {"transactions", "categories", "budgets", "recurring_rules"}
+        if not required_tables.issubset(tables):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid database schema. Missing required tables: {required_tables - tables}",
+            )
+
+        db_url = os.getenv("DATABASE_URL", "sqlite:///./finance.db")
+        target_db = db_url.replace("sqlite:///", "")
+        if os.path.exists(target_db):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            bak_path = f"{target_db}.bak-{timestamp}"
+            shutil.copy2(target_db, bak_path)
+
+        shutil.move(temp_path, target_db)
+        return {"message": "Database restored successfully"}
+    except HTTPException:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise HTTPException(status_code=400, detail=f"Failed to restore database: {str(e)}")
