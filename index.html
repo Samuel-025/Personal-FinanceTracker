@@ -512,32 +512,41 @@ async function checkApiStatus(){
   const badge=document.getElementById("apiStatusBadge");
   if(!badge)return;
 
-  let controller=null, timeoutId=null;
-  if(typeof AbortController!=="undefined"){
-    controller=new AbortController();
-    timeoutId=setTimeout(()=>controller.abort(),800);
-  }
+  const tryEndpoints = [
+    API_BASE,
+    "http://127.0.0.1:8000/api",
+    "http://localhost:8000/api"
+  ];
 
-  try{
-    const options=controller?{signal:controller.signal}:{};
-    const res=await fetch(`${API_BASE}/transactions`,options);
-    if(timeoutId)clearTimeout(timeoutId);
-    if(res.ok){
-      isApiOnline=true;
-      badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ade80"></span> API Connected (SQLite)';
-      badge.style.background="var(--color-primary-highlight)";
-      badge.style.color="var(--color-income)";
-      const apiTxs=await res.json();
-      if(Array.isArray(apiTxs)){
-        transactions=apiTxs;
-        saveData();
-        renderDashboard();
-        renderTransactions();
-      }
-      return;
+  for(const ep of tryEndpoints) {
+    if (!ep) continue;
+    let controller=null, timeoutId=null;
+    if(typeof AbortController!=="undefined"){
+      controller=new AbortController();
+      timeoutId=setTimeout(()=>controller.abort(),1200);
     }
-  }catch(e){
-    if(timeoutId)clearTimeout(timeoutId);
+
+    try{
+      const options=controller?{signal:controller.signal}:{};
+      const res=await fetch(`${ep}/transactions`, { ...options, mode: "cors" });
+      if(timeoutId)clearTimeout(timeoutId);
+      if(res.ok){
+        isApiOnline=true;
+        badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ade80"></span> API Connected (SQLite)';
+        badge.style.background="var(--color-primary-highlight)";
+        badge.style.color="var(--color-income)";
+        const apiTxs=await res.json();
+        if(Array.isArray(apiTxs)){
+          transactions=apiTxs;
+          saveData();
+          renderDashboard();
+          renderTransactions();
+        }
+        return;
+      }
+    }catch(e){
+      if(timeoutId)clearTimeout(timeoutId);
+    }
   }
 
   isApiOnline=false;
@@ -834,49 +843,62 @@ function setChartRange(n,btn){
   document.getElementById("chartSubtitle").textContent=n===0?"All time":`Last ${n} months`;
 }
 function renderLineChart(){
+  if(typeof Chart === "undefined") return;
   const C=getChartColors();
   const months=chartRange===0?12:chartRange;
   const data=getMonthlyData(months),ctx=document.getElementById("lineChart");
+  if(!ctx) return;
   if(lineChart)lineChart.destroy();
   lineChart=new Chart(ctx,{type:"line",data:{labels:data.map(d=>d.label),datasets:[{label:"Income",data:data.map(d=>d.inc),borderColor:C.income,backgroundColor:C.incomeAlpha,fill:true,tension:0.4,pointRadius:4,pointHoverRadius:6,borderWidth:2},{label:"Expenses",data:data.map(d=>d.exp),borderColor:C.expense,backgroundColor:C.expenseAlpha,fill:true,tension:0.4,pointRadius:4,pointHoverRadius:6,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{labels:{color:C.textColor,font:{family:"DM Sans"},usePointStyle:true,pointStyle:"circle"}},tooltip:{backgroundColor:theme==="dark"?"#1c2028":"#fff",titleColor:C.textColor,bodyColor:C.textColor,borderColor:theme==="dark"?"#2a3040":"#e2e8f0",borderWidth:1,callbacks:{label:ctx=>`${ctx.dataset.label}: ₹${ctx.raw.toLocaleString("en-IN",{minimumFractionDigits:2})}`}}},scales:{x:{grid:{color:C.gridColor},ticks:{color:C.textColor,font:{family:"DM Sans",size:11}}},y:{grid:{color:C.gridColor},ticks:{color:C.textColor,font:{family:"DM Mono",size:11},callback:v=>"₹"+v.toLocaleString("en-IN")}}}}});
 }
 function renderDoughnutChart(){
+  if(typeof Chart === "undefined") return;
   const C=getChartColors(),cats={};
   transactions.filter(t=>!isIncome(t.category)).forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.expense,C.blue,C.purple,C.yellow,C.orange,C.income,"#f472b6","#34d399","#a78bfa","#fb923c"];
   const wrap=document.getElementById("wrap-doughnut");
+  if(!wrap) return;
   if(doughnutChart){doughnutChart.destroy();doughnutChart=null;}
   if(!labels.length){wrap.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
   wrap.innerHTML='<canvas id="doughnutChart"></canvas>';
   const ctx=document.getElementById("doughnutChart");
+  if(!ctx) return;
   doughnutChart=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ₹${ctx.raw.toLocaleString("en-IN",{minimumFractionDigits:2})} (${((ctx.raw/values.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)`}}}}});
 }
 function renderAnalytics(){renderBarChart();renderIncomePie();renderExpensePie();renderCategorySummary()}
 function renderBarChart(){
+  if(typeof Chart === "undefined") return;
   const C=getChartColors(),data=getMonthlyData(12),ctx=document.getElementById("barChart");
+  if(!ctx) return;
   if(barChart)barChart.destroy();
   barChart=new Chart(ctx,{type:"bar",data:{labels:data.map(d=>d.label),datasets:[{label:"Income",data:data.map(d=>d.inc),backgroundColor:C.incomeAlpha,borderColor:C.income,borderWidth:1.5,borderRadius:4},{label:"Expenses",data:data.map(d=>d.exp),backgroundColor:C.expenseAlpha,borderColor:C.expense,borderWidth:1.5,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{labels:{color:C.textColor,font:{family:"DM Sans"},usePointStyle:true}}},scales:{x:{grid:{color:C.gridColor},ticks:{color:C.textColor,font:{family:"DM Sans",size:11}}},y:{grid:{color:C.gridColor},ticks:{color:C.textColor,font:{family:"DM Mono",size:11},callback:v=>"₹"+v.toLocaleString("en-IN")}}}}});
 }
 function renderIncomePie(){
+  if(typeof Chart === "undefined") return;
   const C=getChartColors(),cats={};
   transactions.filter(t=>isIncome(t.category)).forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.income,C.blue,C.purple,C.yellow,C.orange];
   const wrap=document.getElementById("wrap-income");
+  if(!wrap) return;
   if(incomeDonut){incomeDonut.destroy();incomeDonut=null;}
   if(!labels.length){wrap.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No income data yet.</p></div>';return}
   wrap.innerHTML='<canvas id="incomeDonut"></canvas>';
   const ctx=document.getElementById("incomeDonut");
+  if(!ctx) return;
   incomeDonut=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"bottom",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}}}}});
 }
 function renderExpensePie(){
+  if(typeof Chart === "undefined") return;
   const C=getChartColors(),cats={};
   transactions.filter(t=>!isIncome(t.category)).forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount});
   const labels=Object.keys(cats),values=Object.values(cats),colors=[C.expense,C.blue,C.purple,C.yellow,C.orange,"#f472b6"];
   const wrap=document.getElementById("wrap-expense");
+  if(!wrap) return;
   if(expenseDonut){expenseDonut.destroy();expenseDonut=null;}
   if(!labels.length){wrap.innerHTML='<div class="empty-state" style="padding:var(--space-8)"><p>No expense data yet.</p></div>';return}
   wrap.innerHTML='<canvas id="expenseDonut"></canvas>';
   const ctx=document.getElementById("expenseDonut");
+  if(!ctx) return;
   expenseDonut=new Chart(ctx,{type:"doughnut",data:{labels:labels.map(l=>(CAT_EMOJIS[l]||"")+" "+l),datasets:[{data:values,backgroundColor:colors.slice(0,labels.length),borderColor:"transparent",hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"bottom",labels:{color:C.textColor,font:{family:"DM Sans",size:11},usePointStyle:true}}}}});
 }
 function renderCategorySummary(){
