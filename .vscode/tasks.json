@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🚀 Start FastAPI Backend Server",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "args": [
+                "-m",
+                "uvicorn",
+                "server:app",
+                "--reload",
+                "--port",
+                "8000"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "🖥️ Start Rich Python CLI",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "args": [
+                "main.py"
+            ],
+            "problemMatcher": [],
+            "group": "test"
+        }
+    ]
+}
