@@ -1,5 +1,6 @@
 # 💰 Personal Finance Tracker V2
 
+[![CI Status](https://github.com/Samuel-025/Personal-FinanceTracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Samuel-025/Personal-FinanceTracker/actions)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-4ade80?style=flat-square&logo=github)](https://samuel-025.github.io/Personal-FinanceTracker/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -9,6 +10,11 @@ A unified personal finance management suite featuring:
 - ⚡ **FastAPI + SQLite Backend (`server.py`)** — REST API with automatic Swagger docs (`/docs`), auto-migrating legacy `finance_data.csv` on startup.
 - 🎨 **Rich Terminal CLI (`main.py`)** — Beautiful colored console UI with KPI panels, category manager, budget goals, recurring rules, and visual charts.
 - 🌐 **Enhanced Web Dashboard (`index.html`)** — Dual Sync Mode (API auto-detect with `localStorage` offline fallback), multi-currency switcher (INR ₹, USD $, EUR €), PDF & Excel exports.
+
+---
+
+### 🏷️ Repository Topics & Tags
+`personal-finance` · `finance-tracker` · `fastapi` · `sqlite` · `rich-cli` · `pdf-export` · `excel-export` · `budget-manager` · `multi-currency` · `chartjs` · `dashboard`
 
 ---
 
