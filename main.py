@@ -88,16 +88,17 @@ def render_transactions_table(transactions, title="Transactions"):
             is_inc = t.category in income_cats
             type_str = "Income" if is_inc else "Expense"
             type_style = "[green]Income[/green]" if is_inc else "[red]Expense[/red]"
-            sym = CURRENCY_SYMBOLS.get(t.currency or "INR", "₹")
-            amt_str = f"[green]+{sym}{t.amount:,.2f}[/green]" if is_inc else f"[red]-{sym}{t.amount:,.2f}[/red]"
+            sym = CURRENCY_SYMBOLS.get(str(t.currency or "INR"), "₹")
+            amt = float(t.amount)
+            amt_str = f"[green]+{sym}{amt:,.2f}[/green]" if is_inc else f"[red]-{sym}{amt:,.2f}[/red]"
 
             table.add_row(
                 str(t.id),
-                t.date,
-                t.category,
+                str(t.date),
+                str(t.category),
                 type_style,
                 amt_str,
-                t.description or "-",
+                str(t.description or "-"),
             )
 
         console.print(table)
@@ -132,7 +133,7 @@ def add_transaction_cli():
         cat_choice = IntPrompt.ask(
             "Select category number", choices=[str(i) for i in range(1, len(categories) + 1)]
         )
-        selected_cat = categories[cat_choice - 1].name
+        selected_cat = str(categories[cat_choice - 1].name)
 
         amount = get_amount()
         description = get_description()
@@ -172,7 +173,7 @@ def view_transactions_cli():
             filtered = []
             for t in transactions:
                 try:
-                    t_date = datetime.strptime(t.date, fmt)
+                    t_date = datetime.strptime(str(t.date), fmt)
                     if start_date and t_date < datetime.strptime(start_date, fmt):
                         continue
                     if end_date and t_date > datetime.strptime(end_date, fmt):
@@ -184,7 +185,7 @@ def view_transactions_cli():
 
         # Sort descending by date
         try:
-            transactions.sort(key=lambda x: datetime.strptime(x.date, "%d-%m-%Y"), reverse=True)
+            transactions.sort(key=lambda x: datetime.strptime(str(x.date), "%d-%m-%Y"), reverse=True)
         except Exception:
             pass
 
@@ -211,19 +212,19 @@ def update_transaction_cli():
             console.print("[red]Transaction ID not found.[/red]")
             return
 
-        console.print(f"\n[dim]Updating Transaction #{tx.id} ({tx.date} - ₹{tx.amount})[/dim]")
-        new_date = Prompt.ask("New date (dd-mm-yyyy) or press Enter to keep current", default=tx.date)
+        console.print(f"\n[dim]Updating Transaction #{tx.id} ({str(tx.date)} - ₹{float(tx.amount)})[/dim]")
+        new_date = Prompt.ask("New date (dd-mm-yyyy) or press Enter to keep current", default=str(tx.date))
         new_amount_str = Prompt.ask("New amount or press Enter to keep current", default=str(tx.amount))
         try:
             new_amount = float(new_amount_str)
         except ValueError:
-            new_amount = tx.amount
+            new_amount = float(tx.amount)
 
-        new_desc = Prompt.ask("New description or press Enter to keep current", default=tx.description or "")
+        new_desc = Prompt.ask("New description or press Enter to keep current", default=str(tx.description or ""))
 
-        tx.date = new_date
-        tx.amount = new_amount
-        tx.description = new_desc
+        setattr(tx, "date", str(new_date))
+        setattr(tx, "amount", float(new_amount))
+        setattr(tx, "description", str(new_desc))
         db.commit()
         console.print("[bold green]✓ Transaction updated successfully![/bold green]")
     finally:
@@ -247,7 +248,7 @@ def delete_transaction_cli():
             console.print("[red]Transaction ID not found.[/red]")
             return
 
-        if Confirm.ask(f"Are you sure you want to delete transaction #{tx.id} ({tx.category} ₹{tx.amount})?"):
+        if Confirm.ask(f"Are you sure you want to delete transaction #{tx.id} ({str(tx.category)} ₹{float(tx.amount)})?"):
             db.delete(tx)
             db.commit()
             console.print("[bold green]✓ Transaction deleted successfully![/bold green]")
@@ -268,7 +269,7 @@ def category_manager_cli():
 
         for c in categories:
             type_style = "[green]Income[/green]" if c.type == "Income" else "[red]Expense[/red]"
-            table.add_row(str(c.id), c.icon, c.name, type_style)
+            table.add_row(str(c.id), str(c.icon), str(c.name), type_style)
 
         console.print(table)
 
@@ -298,8 +299,10 @@ def budget_manager_cli():
         monthly_exp = {}
         for t in txs:
             try:
-                if t.date[-7:] == this_month_str:
-                    monthly_exp[t.category] = monthly_exp.get(t.category, 0.0) + t.amount
+                cat_str = str(t.category)
+                d_str = str(t.date)
+                if d_str[-7:] == this_month_str:
+                    monthly_exp[cat_str] = monthly_exp.get(cat_str, 0.0) + float(t.amount)
             except Exception:
                 pass
 
@@ -311,13 +314,15 @@ def budget_manager_cli():
             table.add_column("Status")
 
             for b in budgets:
-                spent = monthly_exp.get(b.category_name, 0.0)
-                over = spent > b.monthly_limit
-                pct = min(int((spent / b.monthly_limit) * 100), 100) if b.monthly_limit > 0 else 0
+                cat_name_str = str(b.category_name)
+                limit_val = float(b.monthly_limit)
+                spent = monthly_exp.get(cat_name_str, 0.0)
+                over = spent > limit_val
+                pct = min(int((spent / limit_val) * 100), 100) if limit_val > 0 else 0
                 status_str = f"[red]OVER BUDGET! ({pct}%)[/red]" if over else f"[green]{pct}% used[/green]"
                 table.add_row(
-                    b.category_name,
-                    f"₹{b.monthly_limit:,.2f}",
+                    cat_name_str,
+                    f"₹{limit_val:,.2f}",
                     f"₹{spent:,.2f}",
                     status_str,
                 )
@@ -326,7 +331,7 @@ def budget_manager_cli():
             console.print("[yellow]No budget goals set yet.[/yellow]")
 
         if Confirm.ask("\nDo you want to set/update a category budget?", default=False):
-            exp_cats = [c.name for c in db.query(Category).filter(Category.type == "Expense").all()]
+            exp_cats = [str(c.name) for c in db.query(Category).filter(Category.type == "Expense").all()]
             console.print("\nAvailable Expense Categories:")
             for idx, name in enumerate(exp_cats, 1):
                 console.print(f" {idx}. {name}")
@@ -337,7 +342,7 @@ def budget_manager_cli():
 
             b = db.query(Budget).filter(Budget.category_name == cat_name).first()
             if b:
-                b.monthly_limit = limit
+                setattr(b, "monthly_limit", float(limit))
             else:
                 b = Budget(category_name=cat_name, monthly_limit=limit)
                 db.add(b)
@@ -364,11 +369,11 @@ def recurring_manager_cli():
             for r in rules:
                 table.add_row(
                     str(r.id),
-                    r.description,
-                    f"₹{r.amount:,.2f}",
-                    r.category,
-                    r.frequency,
-                    r.next_date,
+                    str(r.description),
+                    f"₹{float(r.amount):,.2f}",
+                    str(r.category),
+                    str(r.frequency),
+                    str(r.next_date),
                 )
             console.print(table)
         else:
@@ -377,7 +382,7 @@ def recurring_manager_cli():
         if Confirm.ask("\nDo you want to add a new recurring rule?", default=False):
             desc = Prompt.ask("Enter description (e.g. Salary, Rent, Netflix)")
             amt = FloatPrompt.ask("Enter amount (₹)")
-            cats = [c.name for c in db.query(Category).all()]
+            cats = [str(c.name) for c in db.query(Category).all()]
             cat = Prompt.ask("Select category", choices=cats)
             freq = Prompt.ask("Select frequency", choices=["monthly", "weekly"], default="monthly")
             next_date = get_date("Enter next due date (dd-mm-yyyy): ")
