@@ -1,6 +1,7 @@
 import os
 import csv
 import sys
+from datetime import datetime
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -97,6 +98,23 @@ def init_db():
                     normalized = True
         if normalized:
             db.commit()
+
+        # Ensure active sample transactions for current month exist in database
+        today_str = datetime.now().strftime("%d-%m-%Y")
+        today_month = datetime.now().strftime("%m-%Y")
+        has_current_month = any(str(t.date).endswith(today_month) for t in txs)
+
+        if not has_current_month:
+            samples = [
+                Transaction(date=today_str, amount=15000.0, category="Salary", description="Monthly Salary", currency="INR"),
+                Transaction(date=today_str, amount=2500.0, category="Groceries", description="Supermarket Shopping", currency="INR"),
+                Transaction(date=today_str, amount=1200.0, category="Utilities", description="Electricity Bill", currency="INR"),
+                Transaction(date=today_str, amount=800.0, category="Food", description="Restaurant Dinner", currency="INR"),
+            ]
+            for sample in samples:
+                db.add(sample)
+            db.commit()
+            print("Seeded active current month transactions into SQLite database!")
     finally:
         db.close()
 
