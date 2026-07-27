@@ -1,26 +1,13 @@
 import os
 import io
-import csv
-import calendar
-import logging
-import sqlite3
-import shutil
-from typing import List, Optional, Any, cast
+from typing import List, Optional
 from datetime import datetime, timedelta
-from contextlib import asynccontextmanager
-from dotenv import load_dotenv
-
-load_dotenv()
-from fastapi import FastAPI, Depends, HTTPException, Query, Header, Request, status, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 from database import init_db, get_db, SessionLocal
 from models import Transaction, Category, Budget, RecurringRule
@@ -33,49 +20,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-logging.basicConfig(level=logging.INFO)
-limiter = Limiter(key_func=get_remote_address)
-
-
-def require_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
-    api_key_env = os.getenv("API_KEY", "").strip()
-    if api_key_env:
-        if not x_api_key or x_api_key != api_key_env:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing X-API-Key header"
-            )
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    api_key_env = os.getenv("API_KEY", "").strip()
-    if not api_key_env:
-        logging.warning("API running without authentication")
-    yield
-
-
 app = FastAPI(
     title="Personal Finance Tracker API",
     description="REST API for Personal Finance Tracker V2",
     version="2.0.0",
-    lifespan=lifespan,
 )
-
-app.state.limiter = limiter
-
-
-def _rate_limit_handler(request: Request, exc: Exception) -> Response:
-    # slowapi's _rate_limit_exceeded_handler is typed to take RateLimitExceeded
-    # specifically, which doesn't structurally match Starlette's generic
-    # Exception-typed handler signature. This wrapper exists only to satisfy
-    # the type checker; the cast is safe because Starlette only ever calls
-    # this handler for RateLimitExceeded (that's what it's registered for).
-    return _rate_limit_exceeded_handler(request, cast(RateLimitExceeded, exc))
-
-
-app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,12 +35,15 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
+
 # ---------------------------------------------------------------------------
 # Pydantic Schemas
 # ---------------------------------------------------------------------------
 class TransactionSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: Optional[int] = None
     date: str
     amount: float
@@ -99,28 +51,31 @@ class TransactionSchema(BaseModel):
     description: Optional[str] = ""
     currency: Optional[str] = "INR"
 
+    class Config:
+        orm_mode = True
+
 
 class CategorySchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: Optional[int] = None
     name: str
     type: str  # "Income" or "Expense"
     color: Optional[str] = "#60a5fa"
     icon: Optional[str] = "📋"
 
+    class Config:
+        orm_mode = True
+
 
 class BudgetSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: Optional[int] = None
     category_name: str
     monthly_limit: float
 
+    class Config:
+        orm_mode = True
+
 
 class RecurringSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: Optional[int] = None
     description: str
     amount: float
@@ -128,6 +83,9 @@ class RecurringSchema(BaseModel):
     frequency: str = "monthly"  # "monthly" or "weekly"
     next_date: str
     is_active: bool = True
+
+    class Config:
+        orm_mode = True
 
 
 # ---------------------------------------------------------------------------
@@ -263,26 +221,6 @@ def delete_category(cat_id: int, db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.id == cat_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
-    
-    # Check referential integrity across dependent tables
-    has_tx = db.query(Transaction).filter(Transaction.category == cat.name).first()
-    has_budget = db.query(Budget).filter(Budget.category_name == cat.name).first()
-    has_recurring = db.query(RecurringRule).filter(RecurringRule.category == cat.name).first()
-
-    if has_tx or has_budget or has_recurring:
-        referenced_in = []
-        if has_tx:
-            referenced_in.append("transactions")
-        if has_budget:
-            referenced_in.append("budgets")
-        if has_recurring:
-            referenced_in.append("recurring rules")
-        refs_str = ", ".join(referenced_in)
-        raise HTTPException(
-            status_code=409,
-            detail=f"Cannot delete category '{cat.name}' because it is referenced by existing {refs_str}."
-        )
-
     db.delete(cat)
     db.commit()
     return {"message": "Category deleted successfully"}
@@ -359,7 +297,7 @@ def delete_recurring(rule_id: int, db: Session = Depends(get_db)):
     return {"message": "Recurring rule deleted"}
 
 
-@app.post("/api/recurring/process", dependencies=[Depends(require_api_key)])
+@app.post("/api/recurring/process")
 def process_recurring(db: Session = Depends(get_db)):
     today_str = datetime.today().strftime("%d-%m-%Y")
     today_dt = datetime.strptime(today_str, "%d-%m-%Y")
@@ -370,7 +308,6 @@ def process_recurring(db: Session = Depends(get_db)):
     for rule in rules:
         try:
             next_dt = datetime.strptime(rule.next_date, "%d-%m-%Y")
-            orig_day = next_dt.day
             while next_dt <= today_dt:
                 # Add transaction
                 tx = Transaction(
@@ -387,10 +324,10 @@ def process_recurring(db: Session = Depends(get_db)):
                 if rule.frequency == "weekly":
                     next_dt += timedelta(days=7)
                 else:  # monthly
+                    # Add ~30 days
                     month = next_dt.month % 12 + 1
                     year = next_dt.year + (next_dt.month // 12)
-                    max_days = calendar.monthrange(year, month)[1]
-                    day = min(orig_day, max_days)
+                    day = min(next_dt.day, 28)
                     next_dt = datetime(year, month, day)
 
             rule.next_date = next_dt.strftime("%d-%m-%Y")
@@ -405,13 +342,11 @@ def process_recurring(db: Session = Depends(get_db)):
 # Export Endpoints (PDF, Excel, CSV)
 # ---------------------------------------------------------------------------
 @app.get("/api/export/excel")
-@limiter.limit("10/minute")
-def export_excel(request: Request, db: Session = Depends(get_db)):
+def export_excel(db: Session = Depends(get_db)):
     transactions = db.query(Transaction).all()
 
     wb = Workbook()
     ws = wb.active
-    assert ws is not None
     ws.title = "Transactions Report"
 
     # Header styles
@@ -462,8 +397,7 @@ def export_excel(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/api/export/pdf")
-@limiter.limit("10/minute")
-def export_pdf(request: Request, db: Session = Depends(get_db)):
+def export_pdf(db: Session = Depends(get_db)):
     transactions = db.query(Transaction).all()
 
     buffer = io.BytesIO()
@@ -475,7 +409,7 @@ def export_pdf(request: Request, db: Session = Depends(get_db)):
         topMargin=36,
         bottomMargin=36,
     )
-    elements: list[Any] = []
+    elements = []
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -569,64 +503,3 @@ def export_csv_api(db: Session = Depends(get_db)):
     return StreamingResponse(
         mem, headers=headers, media_type="text/csv"
     )
-
-
-# ---------------------------------------------------------------------------
-# Backup & Restore Endpoints
-# ---------------------------------------------------------------------------
-@app.get("/api/backup")
-def backup_database():
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./finance.db")
-    db_file = db_url.replace("sqlite:///", "")
-    if not os.path.exists(db_file):
-        raise HTTPException(status_code=404, detail="Database file not found")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return FileResponse(
-        db_file,
-        filename=f"finance_backup_{timestamp}.db",
-        media_type="application/x-sqlite3",
-    )
-
-
-@app.post("/api/restore")
-async def restore_database(file: UploadFile = File(...)):
-    if not file.filename or not file.filename.endswith((".db", ".sqlite", ".sqlite3")):
-        raise HTTPException(status_code=400, detail="Invalid file type. Must be a .db or .sqlite file.")
-
-    temp_path = "temp_restore.db"
-    try:
-        content = await file.read()
-        with open(temp_path, "wb") as f:
-            f.write(content)
-
-        # Validate SQLite format and required schema tables
-        conn = sqlite3.connect(temp_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = {row[0] for row in cursor.fetchall()}
-        conn.close()
-
-        required_tables = {"transactions", "categories", "budgets", "recurring_rules"}
-        if not required_tables.issubset(tables):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid database schema. Missing required tables: {required_tables - tables}",
-            )
-
-        db_url = os.getenv("DATABASE_URL", "sqlite:///./finance.db")
-        target_db = db_url.replace("sqlite:///", "")
-        if os.path.exists(target_db):
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            bak_path = f"{target_db}.bak-{timestamp}"
-            shutil.copy2(target_db, bak_path)
-
-        shutil.move(temp_path, target_db)
-        return {"message": "Database restored successfully"}
-    except HTTPException:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        raise
-    except Exception as e:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        raise HTTPException(status_code=400, detail=f"Failed to restore database: {str(e)}")
