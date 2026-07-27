@@ -213,8 +213,8 @@ def plot_monthly_summary():
     expense_monthly = df[df["category"] == "Expense"]["amount"].resample("ME").sum()
 
     plt.figure(figsize=(10, 5))
-    plt.plot(income_monthly.index.tolist(), income_monthly.values.tolist(), label="Income", color="g", marker="o")
-    plt.plot(expense_monthly.index.tolist(), expense_monthly.values.tolist(), label="Expenses", color="r", marker="o")
+    plt.plot(income_monthly.index.tolist(), [float(v) for v in income_monthly.values], label="Income", color="g", marker="o")
+    plt.plot(expense_monthly.index.tolist(), [float(v) for v in expense_monthly.values], label="Expenses", color="r", marker="o")
     plt.xlabel("Month")
     plt.ylabel("Amount (₹)")
     plt.title("Monthly Income vs Expenses")

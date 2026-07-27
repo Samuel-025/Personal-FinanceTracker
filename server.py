@@ -124,7 +124,7 @@ def get_transactions(
         filtered = []
         for t in transactions:
             try:
-                t_date = datetime.strptime(t.date, fmt)
+                t_date = datetime.strptime(str(t.date), fmt)
                 if start_date and t_date < datetime.strptime(start_date, fmt):
                     continue
                 if end_date and t_date > datetime.strptime(end_date, fmt):
@@ -137,7 +137,7 @@ def get_transactions(
     # Sort descending by date
     try:
         transactions.sort(
-            key=lambda x: datetime.strptime(x.date, "%d-%m-%Y"), reverse=True
+            key=lambda x: datetime.strptime(str(x.date), "%d-%m-%Y"), reverse=True
         )
     except Exception:
         pass
@@ -304,7 +304,7 @@ def process_recurring(db: Session = Depends(get_db)):
 
     for rule in rules:
         try:
-            next_dt = datetime.strptime(rule.next_date, "%d-%m-%Y")
+            next_dt = datetime.strptime(str(rule.next_date), "%d-%m-%Y")
             while next_dt <= today_dt:
                 # Add transaction
                 tx = Transaction(
