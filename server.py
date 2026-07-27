@@ -1,7 +1,9 @@
 import os
 import io
+import csv
 from typing import List, Optional
 from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
@@ -16,14 +18,22 @@ from models import Transaction, Category, Budget, RecurringRule
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Flowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="Personal Finance Tracker API",
     description="REST API for Personal Finance Tracker V2",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -33,11 +43,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def startup_event():
-    init_db()
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +344,8 @@ def export_excel(db: Session = Depends(get_db)):
 
     wb = Workbook()
     ws = wb.active
+    if ws is None:
+        raise RuntimeError("Workbook has no active worksheet")
     ws.title = "Transactions Report"
 
     # Header styles
@@ -401,7 +408,7 @@ def export_pdf(db: Session = Depends(get_db)):
         topMargin=36,
         bottomMargin=36,
     )
-    elements = []
+    elements: List[Flowable] = []
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -423,7 +430,7 @@ def export_pdf(db: Session = Depends(get_db)):
     elements.append(Spacer(1, 16))
 
     # Table Header
-    data = [["Date", "Category", "Amount (₹)", "Description"]]
+    data: List[List[str]] = [["Date", "Category", "Amount (₹)", "Description"]]
 
     total_inc = 0
     total_exp = 0
@@ -435,7 +442,7 @@ def export_pdf(db: Session = Depends(get_db)):
             total_inc += tx.amount
         else:
             total_exp += tx.amount
-        data.append([tx.date, tx.category, f"₹{tx.amount:,.2f}", tx.description or "-"])
+        data.append([str(tx.date), str(tx.category), f"₹{tx.amount:,.2f}", str(tx.description or "-")])
 
     t = Table(data, colWidths=[80, 100, 100, 240])
     t.setStyle(
