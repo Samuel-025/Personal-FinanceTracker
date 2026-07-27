@@ -288,10 +288,16 @@ tr:hover .td-actions{opacity:1}
         <div class="card">
           <div class="card-header">
             <div class="card-title">All Transactions</div>
-            <button class="btn btn-secondary btn-sm" onclick="exportCSV()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Export CSV
-            </button>
+            <div style="display:flex;align-items:center;gap:var(--space-2)">
+              <button id="batchDeleteBtn" class="btn btn-danger btn-sm" style="display:none;padding:4px 10px;font-size:12px;background:var(--color-expense);color:#fff" onclick="openBatchDeleteModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Delete Selected (<span id="selectedTxCount">0</span>)
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="exportCSV()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
+            </div>
           </div>
           <div class="filter-bar" style="margin-bottom:var(--space-5)">
             <div class="form-group" style="min-width:120px"><label class="form-label">From</label><input type="date" class="form-input" id="filterFrom" oninput="renderTransactions()"></div>
@@ -303,6 +309,7 @@ tr:hover .td-actions{opacity:1}
           <div class="table-wrap">
             <table>
               <thead><tr>
+                <th style="width:36px;text-align:center"><input type="checkbox" id="selectAllTx" onchange="toggleSelectAllTx(this.checked)" title="Select All"></th>
                 <th onclick="sortBy('date')" id="th-date">Date <span id="sort-date"></span></th>
                 <th onclick="sortBy('description')" id="th-description">Description <span id="sort-description"></span></th>
                 <th onclick="sortBy('category')" id="th-category">Category <span id="sort-category"></span></th>
@@ -384,6 +391,18 @@ tr:hover .td-actions{opacity:1}
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- BATCH DELETE MODAL -->
+<div class="modal-overlay" id="batchDeleteModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Delete Selected Transactions?</div>
+    <p style="color:var(--color-text-muted);font-size:var(--text-sm)">Are you sure you want to delete <strong id="batchDeleteCountText" style="color:var(--color-expense)">0</strong> selected transaction(s)? This action cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeBatchDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" style="background:var(--color-expense);color:#fff" onclick="confirmBatchDelete()">Delete Selected</button>
     </div>
   </div>
 </div>
@@ -528,9 +547,58 @@ function renderTransactions(){
   footer.innerHTML=`<span>${data.length} transaction${data.length!==1?"s":""}</span><span>Income: <strong style="color:var(--color-income)">${fmt(totInc)}</strong> · Expense: <strong style="color:var(--color-expense)">${fmt(totExp)}</strong> · Net: <strong>${fmt(totInc-totExp)}</strong></span>`;
   data.forEach(tx=>{
     const inc=isIncome(tx.category),tr=document.createElement("tr");
-    tr.innerHTML=`<td style="color:var(--color-text-muted)">${fmtDate(tx.date)}</td><td>${tx.description||'<span style="color:var(--color-text-faint);font-style:italic">No description</span>'}</td><td><span class="badge badge-${inc?"income":"expense"}">${CAT_EMOJIS[tx.category]||""} ${tx.category}</span></td><td class="amount ${inc?"income":"expense"}">${inc?"+":"-"}${fmt(tx.amount)}</td><td><div class="td-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="openEdit(${tx.id})" title="Edit" style="color:var(--color-blue)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-icon btn-ghost btn-sm" onclick="openDelete(${tx.id})" title="Delete" style="color:var(--color-expense)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button></div></td>`;
+    tr.innerHTML=`<td style="text-align:center"><input type="checkbox" class="tx-checkbox" value="${tx.id}" onchange="updateBatchDeleteButton()"></td><td style="color:var(--color-text-muted)">${fmtDate(tx.date)}</td><td>${tx.description||'<span style="color:var(--color-text-faint);font-style:italic">No description</span>'}</td><td><span class="badge badge-${inc?"income":"expense"}">${CAT_EMOJIS[tx.category]||""} ${tx.category}</span></td><td class="amount ${inc?"income":"expense"}">${inc?"+":"-"}${fmt(tx.amount)}</td><td><div class="td-actions"><button class="btn btn-icon btn-ghost btn-sm" onclick="openEdit(${tx.id})" title="Edit" style="color:var(--color-blue)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="btn btn-icon btn-ghost btn-sm" onclick="openDelete(${tx.id})" title="Delete" style="color:var(--color-expense)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button></div></td>`;
     tbody.appendChild(tr);
   });
+  updateBatchDeleteButton();
+}
+function toggleSelectAllTx(checked){
+  const checkboxes=document.querySelectorAll(".tx-checkbox");
+  checkboxes.forEach(cb=>cb.checked=checked);
+  updateBatchDeleteButton();
+}
+function updateBatchDeleteButton(){
+  const checked=document.querySelectorAll(".tx-checkbox:checked");
+  const all=document.querySelectorAll(".tx-checkbox");
+  const count=checked.length;
+  const batchBtn=document.getElementById("batchDeleteBtn");
+  const countSpan=document.getElementById("selectedTxCount");
+  const selectAll=document.getElementById("selectAllTx");
+
+  if(countSpan) countSpan.textContent=count;
+  if(batchBtn) batchBtn.style.display=count>0?"inline-flex":"none";
+  if(selectAll) selectAll.checked=all.length>0 && count===all.length;
+}
+function openBatchDeleteModal(){
+  const checked=document.querySelectorAll(".tx-checkbox:checked");
+  if(!checked.length) return;
+  document.getElementById("batchDeleteCountText").textContent=checked.length;
+  document.getElementById("batchDeleteModal").classList.add("open");
+}
+function closeBatchDeleteModal(){
+  document.getElementById("batchDeleteModal").classList.remove("open");
+}
+async function confirmBatchDelete(){
+  const checked=Array.from(document.querySelectorAll(".tx-checkbox:checked"));
+  if(!checked.length) return;
+  const idsToDelete=checked.map(cb=>parseInt(cb.value)).filter(Boolean);
+  
+  if(typeof isApiOnline !== "undefined" && isApiOnline){
+    for(const id of idsToDelete){
+      try {
+        await fetch(`${API_BASE}/transactions/${id}`, { method: "DELETE" });
+      } catch(e) {
+        console.error(`Failed to delete transaction ${id} via API:`, e);
+      }
+    }
+  }
+
+  transactions=transactions.filter(t=>!idsToDelete.includes(t.id));
+  saveData();
+  closeBatchDeleteModal();
+  toast(`${idsToDelete.length} transaction(s) deleted.`,"info");
+  renderTransactions();
+  if(document.getElementById("view-dashboard").classList.contains("active")) renderDashboard();
 }
 function populateCategoryFilter(){
   const sel=document.getElementById("filterCategory"),current=sel.value;
