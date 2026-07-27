@@ -19,6 +19,7 @@ DEFAULT_CATEGORIES = [
     {"name": "Business", "type": "Income", "color": "#fbbf24", "icon": "🏪"},
     {"name": "Other Income", "type": "Income", "color": "#34d399", "icon": "💰"},
     {"name": "Food", "type": "Expense", "color": "#f87171", "icon": "🍽"},
+    {"name": "Groceries", "type": "Expense", "color": "#34d399", "icon": "🛒"},
     {"name": "Transport", "type": "Expense", "color": "#fb923c", "icon": "🚗"},
     {"name": "Housing", "type": "Expense", "color": "#f472b6", "icon": "🏠"},
     {"name": "Utilities", "type": "Expense", "color": "#fbbf24", "icon": "💡"},

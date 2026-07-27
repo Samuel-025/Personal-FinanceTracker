@@ -433,13 +433,118 @@ tr:hover .td-actions{opacity:1}
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+const API_BASE = window.location.origin.startsWith("http")
+  ? window.location.origin + "/api"
+  : "http://127.0.0.1:8000/api";
+let isApiOnline = false;
+
 const INCOME_CATS=["Salary","Freelance","Investment","Business","Other Income"];
-const EXPENSE_CATS=["Food","Transport","Housing","Utilities","Healthcare","Entertainment","Shopping","Education","Travel","Other Expense"];
-const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Food:"🍽",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
+const EXPENSE_CATS=["Food","Groceries","Transport","Housing","Utilities","Healthcare","Entertainment","Shopping","Education","Travel","Other Expense"];
+const CAT_EMOJIS={Salary:"💼",Freelance:"💻",Investment:"📈",Business:"🏪","Other Income":"💰",Food:"🍽",Groceries:"🛒",Transport:"🚗",Housing:"🏠",Utilities:"💡",Healthcare:"🏥",Entertainment:"🎬",Shopping:"🛍",Education:"📚",Travel:"✈","Other Expense":"📋"};
+
 let transactions=JSON.parse(localStorage.getItem("fintrack_txs")||"[]");
 let budgets=JSON.parse(localStorage.getItem("fintrack_budgets")||"{}");
 let nextId=transactions.reduce((m,t)=>Math.max(m,t.id||0),0)+1,sortField="date",sortDir=-1,pendingDeleteId=null,editingId=null,chartRange=6;
 let lineChart,doughnutChart,barChart,incomeDonut,expenseDonut,theme="dark";
+
+function toIso(dStr) {
+  if (!dStr) return "";
+  if (dStr.includes("-") && dStr.split("-")[0].length === 4) return dStr;
+  if (dStr.includes("-") && dStr.split("-")[0].length === 2) {
+    const parts = dStr.split("-");
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dStr;
+}
+
+function toApiDate(dStr) {
+  if (!dStr) return "";
+  if (dStr.includes("-") && dStr.split("-")[0].length === 4) {
+    const parts = dStr.split("-");
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dStr;
+}
+
+function sanitizeTx(t) {
+  if (!t || typeof t !== "object") return null;
+  return {
+    id: t.id || Math.floor(Math.random() * 1000000),
+    date: toIso(t.date || new Date().toISOString().split("T")[0]),
+    amount: parseFloat(t.amount) || 0,
+    category: t.category || "Other Expense",
+    description: t.description || "",
+    currency: t.currency || "INR"
+  };
+}
+
+async function checkApiStatus(){
+  const badge=document.getElementById("apiStatusBadge");
+  const tryEndpoints = [
+    API_BASE,
+    "http://127.0.0.1:8000/api",
+    "http://localhost:8000/api"
+  ];
+
+  for(const ep of tryEndpoints) {
+    if (!ep) continue;
+    let controller=null, timeoutId=null;
+    if(typeof AbortController!=="undefined"){
+      controller=new AbortController();
+      timeoutId=setTimeout(()=>controller.abort(),1500);
+    }
+
+    try{
+      const options=controller?{signal:controller.signal}:{};
+      const res=await fetch(`${ep}/transactions`, { ...options, mode: "cors" });
+      if(timeoutId)clearTimeout(timeoutId);
+      if(res.ok){
+        isApiOnline=true;
+        if(badge){
+          badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#4ade80"></span> API Connected (SQLite)';
+          badge.style.background="var(--color-primary-highlight)";
+          badge.style.color="var(--color-income)";
+        }
+        try {
+          const apiTxs=await res.json();
+          if(Array.isArray(apiTxs)){
+            transactions=apiTxs.map(sanitizeTx).filter(Boolean);
+            saveData();
+            renderDashboard();
+            renderTransactions();
+          }
+        } catch(e) {
+          console.error("API data processing error:", e);
+        }
+
+        try {
+          const budgRes = await fetch(`${ep}/budgets`);
+          if (budgRes.ok) {
+            const apiBudgets = await budgRes.json();
+            if (Array.isArray(apiBudgets)) {
+              apiBudgets.forEach(b => { budgets[b.category_name] = b.monthly_limit; });
+              saveData();
+            }
+          }
+        } catch(e) {}
+
+        return;
+      }
+    }catch(e){
+      if(timeoutId)clearTimeout(timeoutId);
+    }
+  }
+
+  isApiOnline=false;
+  if(badge){
+    badge.innerHTML='<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#9ca3af"></span> Offline (localStorage)';
+    badge.style.background="rgba(255,255,255,0.06)";
+    badge.style.color="var(--color-text-muted)";
+  }
+  renderDashboard();
+  renderTransactions();
+}
+
 function saveData(){
   try{
     localStorage.setItem("fintrack_txs",JSON.stringify(transactions));
@@ -447,7 +552,7 @@ function saveData(){
   }catch(e){console.error("localStorage save failed",e)}
 }
 const fmt=n=>"₹"+Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtDate=s=>{if(!s)return "";const d=new Date(s+"T00:00:00");return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})};
+const fmtDate=s=>{if(!s)return "";const iso=toIso(s);const d=new Date(iso+"T00:00:00");return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})};
 const isIncome=cat=>INCOME_CATS.includes(cat);
 const getType=cat=>isIncome(cat)?"Income":"Expense";
 function getFilteredTx(){
@@ -455,8 +560,9 @@ function getFilteredTx(){
   const type=document.getElementById("filterType").value,cat=document.getElementById("filterCategory").value;
   const search=document.getElementById("globalSearch").value.toLowerCase();
   return transactions.filter(t=>{
-    if(from&&t.date<from)return false;
-    if(to&&t.date>to)return false;
+    const isoDate=toIso(t.date);
+    if(from&&isoDate<from)return false;
+    if(to&&isoDate>to)return false;
     if(type&&getType(t.category)!==type)return false;
     if(cat&&t.category!==cat)return false;
     if(search&&!t.description.toLowerCase().includes(search)&&!t.category.toLowerCase().includes(search)&&!String(t.amount).includes(search))return false;
@@ -508,7 +614,7 @@ function resetAddForm(){
   ["fg-date","fg-amount","fg-category"].forEach(id=>document.getElementById(id).classList.remove("error"));
   document.getElementById("addSuccessCard").style.display="none";
 }
-function handleAddSubmit(e){
+async function handleAddSubmit(e){
   e.preventDefault();
   const date=document.getElementById("inp-date").value;
   const amount=parseFloat(document.getElementById("inp-amount").value);
@@ -518,14 +624,35 @@ function handleAddSubmit(e){
   document.getElementById("fg-amount").classList.toggle("error",!amount||amount<=0||isNaN(amount));
   document.getElementById("fg-category").classList.toggle("error",!category);
   if(!date||!amount||amount<=0||isNaN(amount)||!category)return;
-  const tx={id:nextId++,date,amount,category,description:desc};
-  transactions.push(tx);
-  transactions.sort((a,b)=>b.date.localeCompare(a.date));
+  let newTx={date,amount,category,description:desc,currency:"INR"};
+  if(isApiOnline){
+    try {
+      const res=await fetch(`${API_BASE}/transactions`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({...newTx,date:toApiDate(date)})
+      });
+      if(res.ok){
+        const created=await res.json();
+        newTx=sanitizeTx(created);
+      }else{
+        newTx.id=nextId++;
+      }
+    }catch(e){
+      console.error("API POST error:",e);
+      newTx.id=nextId++;
+    }
+  }else{
+    newTx.id=nextId++;
+  }
+  transactions.push(newTx);
+  transactions.sort((a,b)=>toIso(b.date).localeCompare(toIso(a.date)));
   saveData();
   document.getElementById("addSuccessMsg").textContent=`Added: ${getType(category)} of ${fmt(amount)} for "${category}" on ${fmtDate(date)}`;
   resetAddForm();
   document.getElementById("addSuccessCard").style.display="block";
   toast("Transaction added successfully!");
+  renderDashboard();
 }
 function renderTransactions(){
   populateCategoryFilter();
@@ -628,7 +755,7 @@ function openEdit(id){
   document.getElementById("editModal").classList.add("open");
 }
 function closeEditModal(){document.getElementById("editModal").classList.remove("open")}
-function saveEdit(){
+async function saveEdit(){
   const date=document.getElementById("edit-date").value,amount=parseFloat(document.getElementById("edit-amount").value);
   const category=document.getElementById("edit-category").value,desc=document.getElementById("edit-desc").value.trim();
   document.getElementById("efg-date").classList.toggle("error",!date);
@@ -636,15 +763,35 @@ function saveEdit(){
   document.getElementById("efg-category").classList.toggle("error",!category);
   if(!date||!amount||amount<=0||isNaN(amount)||!category)return;
   const tx=transactions.find(t=>t.id===editingId);
-  Object.assign(tx,{date,amount,category,description:desc});
-  transactions.sort((a,b)=>b.date.localeCompare(a.date));
-  saveData();
-  closeEditModal();toast("Transaction updated!");renderTransactions();
-  if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
+  if(tx){
+    Object.assign(tx,{date,amount,category,description:desc});
+    if(isApiOnline){
+      try {
+        await fetch(`${API_BASE}/transactions/${editingId}`,{
+          method:"PUT",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({date:toApiDate(date),amount,category,description:desc,currency:"INR"})
+        });
+      } catch(e) {
+        console.error("API PUT error:", e);
+      }
+    }
+    transactions.sort((a,b)=>toIso(b.date).localeCompare(toIso(a.date)));
+    saveData();
+    closeEditModal();toast("Transaction updated!");renderTransactions();
+    if(document.getElementById("view-dashboard").classList.contains("active"))renderDashboard();
+  }
 }
 function openDelete(id){pendingDeleteId=id;document.getElementById("deleteModal").classList.add("open")}
 function closeDeleteModal(){document.getElementById("deleteModal").classList.remove("open")}
-function confirmDelete(){
+async function confirmDelete(){
+  if(isApiOnline && pendingDeleteId){
+    try {
+      await fetch(`${API_BASE}/transactions/${pendingDeleteId}`,{method:"DELETE"});
+    } catch(e) {
+      console.error("API DELETE error:", e);
+    }
+  }
   transactions=transactions.filter(t=>t.id!==pendingDeleteId);
   saveData();
   closeDeleteModal();toast("Transaction deleted.","info");renderTransactions();
@@ -652,7 +799,7 @@ function confirmDelete(){
 }
 function renderDashboard(){
   const now=new Date(),thisMonth=now.toISOString().slice(0,7);
-  const monthly=transactions.filter(t=>t.date.slice(0,7)===thisMonth);
+  const monthly=transactions.filter(t=>toIso(t.date).slice(0,7)===thisMonth);
   const totInc=monthly.filter(t=>isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
   const totExp=monthly.filter(t=>!isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
   const net=totInc-totExp;
@@ -678,7 +825,7 @@ function getMonthlyData(months){
   for(let i=months-1;i>=0;i--){
     const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);
     const m=d.toISOString().slice(0,7),label=d.toLocaleDateString("en-IN",{month:"short",year:"2-digit"});
-    const mTx=transactions.filter(t=>t.date.slice(0,7)===m);
+    const mTx=transactions.filter(t=>toIso(t.date).slice(0,7)===m);
     const inc=mTx.filter(t=>isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
     const exp=mTx.filter(t=>!isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
     result.push({m,label,inc,exp});
@@ -749,17 +896,29 @@ function renderCategorySummary(){
   }).join("");
 }
 function openBudgetModal(){document.getElementById("budgetModal").classList.add("open")}
-function saveBudget(){
+async function saveBudget(){
   const cat=document.getElementById("budg-category").value,limit=parseFloat(document.getElementById("budg-limit").value);
   if(!cat||!limit||limit<=0){toast("Enter a valid budget limit","error");return}
-  budgets[cat]=limit;saveData();document.getElementById("budgetModal").classList.remove("open");
+  budgets[cat]=limit;
+  if(isApiOnline){
+    try {
+      await fetch(`${API_BASE}/budgets`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({category_name:cat,monthly_limit:limit})
+      });
+    } catch(e) {
+      console.error("API Budget POST error:", e);
+    }
+  }
+  saveData();document.getElementById("budgetModal").classList.remove("open");
   toast(`Budget set for ${cat}!`);renderBudgets();
 }
 function renderBudgets(){
   const now=new Date(),thisMonth=now.toISOString().slice(0,7);
   const list=document.getElementById("budgetList"),glance=document.getElementById("monthGlance");
   const monthlyExp={};
-  transactions.filter(t=>t.date.slice(0,7)===thisMonth&&!isIncome(t.category)).forEach(t=>{monthlyExp[t.category]=(monthlyExp[t.category]||0)+t.amount});
+  transactions.filter(t=>toIso(t.date).slice(0,7)===thisMonth&&!isIncome(t.category)).forEach(t=>{monthlyExp[t.category]=(monthlyExp[t.category]||0)+t.amount});
   if(!Object.keys(budgets).length){
     list.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;margin:0 auto 16px;color:var(--color-text-faint)"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><h3>No budgets set</h3><p>Set monthly spending limits to track your goals.</p></div>';
   }else{
@@ -769,18 +928,28 @@ function renderBudgets(){
       return `<div class="progress-wrap" style="margin-bottom:var(--space-5)"><div class="progress-header"><span style="font-size:var(--text-sm);font-weight:500">${CAT_EMOJIS[cat]||""} ${cat}</span><div style="display:flex;align-items:center;gap:var(--space-4)"><span style="font-size:var(--text-xs);color:var(--color-text-muted)">Limit: ${fmt(limit)}</span><span style="font-size:var(--text-sm);font-weight:600;font-family:var(--font-mono);color:${color}">${fmt(spent)}</span>${over?'<span class="badge" style="background:var(--color-error-highlight);color:var(--color-expense)">Over budget!</span>':""}</div></div><div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div><div style="font-size:var(--text-xs);color:var(--color-text-faint)">${pct}% used${over?` · ${fmt(spent-limit)} over`:` · ${fmt(limit-spent)} remaining`}</div><div style="display:flex;gap:var(--space-2);margin-top:var(--space-2)"><button class="btn btn-ghost btn-sm" style="font-size:var(--text-xs);color:var(--color-expense)" onclick="deleteBudget('${cat}')">Remove</button></div></div>`;
     }).join("");
   }
-  const monthTx=transactions.filter(t=>t.date.slice(0,7)===thisMonth);
+  const monthTx=transactions.filter(t=>toIso(t.date).slice(0,7)===thisMonth);
   const inc=monthTx.filter(t=>isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
   const exp=monthTx.filter(t=>!isIncome(t.category)).reduce((s,t)=>s+t.amount,0);
   const monthName=now.toLocaleDateString("en-IN",{month:"long",year:"numeric"});
   glance.innerHTML=`<div class="summary-row"><div class="summary-row-label">📅 ${monthName} Income</div><div class="summary-row-value" style="color:var(--color-income)">${fmt(inc)}</div></div><div class="summary-row"><div class="summary-row-label">💸 ${monthName} Expenses</div><div class="summary-row-value" style="color:var(--color-expense)">${fmt(exp)}</div></div><div class="summary-row"><div class="summary-row-label">💰 Net Savings</div><div class="summary-row-value" style="color:${inc-exp>=0?"var(--color-income)":"var(--color-expense)"}">${fmt(inc-exp)}</div></div>`;
 }
-function deleteBudget(cat){delete budgets[cat];saveData();toast(`Budget for ${cat} removed.`,"info");renderBudgets()}
+async function deleteBudget(cat){
+  if(isApiOnline){
+    try {
+      await fetch(`${API_BASE}/budgets/${encodeURIComponent(cat)}`,{method:"DELETE"});
+    } catch(e) {
+      console.error("API Budget DELETE error:", e);
+    }
+  }
+  delete budgets[cat];saveData();toast(`Budget for ${cat} removed.`,"info");renderBudgets()
+}
 function rebuildCharts(){
   if(document.getElementById("view-dashboard").classList.contains("active")){renderLineChart();renderDoughnutChart()}
   if(document.getElementById("view-analytics").classList.contains("active")){renderAnalytics()}
 }
 document.getElementById("inp-date").value=new Date().toISOString().split("T")[0];
+checkApiStatus();
 renderDashboard();
 lucide.createIcons();
 </script>
