@@ -17,21 +17,25 @@ Thank you for your interest in contributing to Personal Finance Tracker!
    pip install -r requirements.txt
    ```
 
-## 🧪 Running Tests & Diagnostics
+## 🧪 Running Tests & Verification
 
-Before opening a pull request, please verify that all core modules and API tests pass:
+Before opening a pull request, please verify that core imports and REST API endpoints execute cleanly:
 
 ```bash
 python -c "
 from fastapi.testclient import TestClient
+from database import init_db
 from server import app
 import main, models, database, data_entry
 
-client = TestClient(app)
-assert client.get('/api/categories').status_code == 200
-assert client.get('/api/transactions').status_code == 200
-assert client.get('/api/export/pdf').status_code == 200
-print('All tests passed!')
+init_db()
+with TestClient(app) as client:
+    assert client.get('/api/categories').status_code == 200
+    assert client.get('/api/transactions').status_code == 200
+    assert client.get('/api/export/csv').status_code == 200
+    assert client.get('/api/export/excel').status_code == 200
+    assert client.get('/api/export/pdf').status_code == 200
+    print('All automated API tests passed!')
 "
 ```
 
@@ -39,4 +43,4 @@ print('All tests passed!')
 
 - Ensure your code follows PEP 8 standards.
 - Keep commits concise and descriptive.
-- Make sure existing functionality remains intact.
+- Make sure existing web dashboard and CLI functionalities remain intact.
