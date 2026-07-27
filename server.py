@@ -1,6 +1,7 @@
 import os
 import io
 import csv
+import calendar
 from typing import List, Optional
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -218,6 +219,18 @@ def delete_category(cat_id: int, db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.id == cat_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
+
+    in_use = (
+        db.query(Transaction).filter(Transaction.category == cat.name).first()
+        or db.query(Budget).filter(Budget.category_name == cat.name).first()
+        or db.query(RecurringRule).filter(RecurringRule.category == cat.name).first()
+    )
+    if in_use:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Category '{cat.name}' is still in use and cannot be deleted",
+        )
+
     db.delete(cat)
     db.commit()
     return {"message": "Category deleted successfully"}
@@ -305,6 +318,7 @@ def process_recurring(db: Session = Depends(get_db)):
     for rule in rules:
         try:
             next_dt = datetime.strptime(str(rule.next_date), "%d-%m-%Y")
+            orig_day = next_dt.day
             while next_dt <= today_dt:
                 # Add transaction
                 tx = Transaction(
@@ -321,10 +335,10 @@ def process_recurring(db: Session = Depends(get_db)):
                 if rule.frequency == "weekly":
                     next_dt += timedelta(days=7)
                 else:  # monthly
-                    # Add ~30 days
                     month = next_dt.month % 12 + 1
                     year = next_dt.year + (next_dt.month // 12)
-                    day = min(next_dt.day, 28)
+                    max_day = calendar.monthrange(year, month)[1]
+                    day = min(orig_day, max_day)
                     next_dt = datetime(year, month, day)
 
             rule.next_date = next_dt.strftime("%d-%m-%Y")

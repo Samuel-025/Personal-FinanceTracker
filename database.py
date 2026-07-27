@@ -1,5 +1,7 @@
 import os
 import csv
+from typing import Optional, Any
+from datetime import datetime
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,6 +34,20 @@ DEFAULT_CATEGORIES = [
 ]
 
 
+def normalize_date(date_str: Any) -> Optional[str]:
+    if not date_str or pd.isna(date_str):
+        return None
+    raw = str(date_str).strip()
+    formats = ["%d-%m-%Y", "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return dt.strftime("%d-%m-%Y")
+        except ValueError:
+            pass
+    return None
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -49,11 +65,15 @@ def init_db():
                 df = pd.read_csv(csv_path)
                 if not df.empty and "date" in df.columns:
                     for _, row in df.iterrows():
+                        norm_date = normalize_date(row.get("date"))
+                        if not norm_date:
+                            print(f"⚠️ Skipping CSV row with invalid date: {row.get('date')}")
+                            continue
                         desc = str(row.get("description", ""))
                         if desc == "nan" or pd.isna(desc):
                             desc = ""
                         tx = Transaction(
-                            date=str(row["date"]),
+                            date=norm_date,
                             amount=float(row["amount"]),
                             category=str(row["category"]),
                             description=desc,

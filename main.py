@@ -2,7 +2,7 @@ import pandas as pd
 import csv
 import sys
 from datetime import datetime
-from data_entry import get_amount, get_category, get_date, get_description
+from data_entry import get_amount, get_date, get_description
 import matplotlib.pyplot as plt
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -158,7 +158,8 @@ def add():
         allow_default=True,
     )
     amount = get_amount()
-    category = get_category()
+    cat_input = input("Enter the category ('I' for Income or 'E' for Expense): ").strip().upper()
+    category = "Income" if cat_input in ["I", "INCOME"] else "Expense"
     description = get_description()
     CSV.add_entry(date, amount, category, description)
 
