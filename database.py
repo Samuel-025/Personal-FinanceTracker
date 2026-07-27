@@ -1,7 +1,7 @@
 import os
 import csv
 import sys
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
@@ -44,7 +44,7 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-def normalize_date(date_str: str) -> Optional[str]:
+def normalize_date(date_str: Any) -> Optional[str]:
     if not date_str or pd.isna(date_str):
         return None
     raw = str(date_str).strip()
@@ -74,11 +74,11 @@ def init_db():
             try:
                 df = pd.read_csv(csv_path)
                 if not df.empty and "date" in df.columns:
-                    for idx, row in df.iterrows():
+                    for row_num, (idx, row) in enumerate(df.iterrows(), start=1):
                         raw_date = row.get("date")
                         norm_date = normalize_date(raw_date)
                         if not norm_date:
-                            print(f"Warning: Skipping CSV row {idx+1} due to unparseable date '{raw_date}'")
+                            print(f"Warning: Skipping CSV row {row_num} due to unparseable date '{raw_date}'")
                             continue
 
                         desc = str(row.get("description", ""))
